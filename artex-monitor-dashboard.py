@@ -1216,22 +1216,23 @@ def _check_privileged() -> bool:
     return r.stdout.strip() == 'ok'
 
 def _ensure_script() -> bool:
-    """Kopiert Script in Container falls nötig. Gibt True zurück wenn OK."""
+    """Kopiert Script IMMER frisch in den Container. Gibt True zurück wenn OK.
+    Vorher wurde nur kopiert wenn die Datei im Container fehlte - dadurch
+    blieb nach jeder Änderung an artex-monitor.py die ALTE Version aktiv,
+    solange der Container nicht neu erstellt wurde. Ein unbedingtes
+    docker cp bei jedem Backend-Start stellt sicher, dass Fixes ankommen."""
     try:
         # Alte Monitor-Instanzen beenden (verhindert doppelte Alerts durch parallele Prozesse)
         subprocess.run(['docker', 'exec', CONTAINER, 'pkill', '-f', MONITOR_DST],
                        capture_output=True, timeout=5)
         time.sleep(0.5)
 
-        r = subprocess.run(['docker', 'exec', CONTAINER, 'test', '-f', MONITOR_DST],
-                           capture_output=True, timeout=5)
-        if r.returncode != 0:
-            if not os.path.exists(MONITOR_SCRIPT):
-                broadcast({'type': 'error',
-                           'message': f'Monitor-Script nicht gefunden: {MONITOR_SCRIPT}'})
-                return False
-            subprocess.run(['docker', 'cp', MONITOR_SCRIPT, f'{CONTAINER}:{MONITOR_DST}'],
-                           check=True, timeout=15)
+        if not os.path.exists(MONITOR_SCRIPT):
+            broadcast({'type': 'error',
+                       'message': f'Monitor-Script nicht gefunden: {MONITOR_SCRIPT}'})
+            return False
+        subprocess.run(['docker', 'cp', MONITOR_SCRIPT, f'{CONTAINER}:{MONITOR_DST}'],
+                       check=True, timeout=15)
         return True
     except Exception as e:
         broadcast({'type': 'error', 'message': f'Script-Copy fehlgeschlagen: {e}'})

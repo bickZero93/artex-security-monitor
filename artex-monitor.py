@@ -205,6 +205,7 @@ class TunnelSniffer:
     """
     def __init__(self):
         self.tracked   = {}  # (src,sp,dst,dp) → {'buf': bytearray, 'dir': str}
+        self.tracked_remotes = set()  # (rem_ip, rem_port) → bei JEDEM lokalen Port tracken
         self.udp_active = {} # (remote_ip, remote_port, local_port) → Metadaten
         self.dns_hits   = collections.defaultdict(collections.deque)
         self.dns_domains = {} # Basisdomain → letzter verdächtiger Zeitpunkt
@@ -245,6 +246,16 @@ class TunnelSniffer:
                                        'remote': f'{rem_ip}:{rem_port}',
                                        'rem_ip': rem_ip, 'rem_port': rem_port,
                                        'local_port': local_port}
+
+    def track_remote(self, rem_ip, rem_port):
+        """Merkt einen Remote-Endpunkt dauerhaft vor, unabhängig vom lokalen Port.
+        Deckt Connect-Senden-Schließen-Zyklen ab, die schneller abgeschlossen
+        sind als das periodische /proc/net/tcp-Polling (1.5s) – dort kommt
+        track() zu spät, weil die Verbindung beim nächsten Scan schon wieder
+        im TIME_WAIT ist. Der Raw-Socket-Loop läuft dagegen live und erkennt
+        jedes Paket zu diesem Endpunkt sofort, auch mit neuem lokalen Port."""
+        with self.lock:
+            self.tracked_remotes.add((rem_ip, rem_port))
 
     @staticmethod
     def _owner_pid(info):
@@ -572,6 +583,24 @@ class TunnelSniffer:
             if not payload: continue
 
             with self.lock:
+                # Dynamisches Tracking für bekannte Remote-Endpunkte: erfasst auch
+                # kurzlebige Connect-Senden-Schließen-Zyklen ab dem allerersten
+                # Paket, unabhängig vom (noch unbekannten) lokalen Port.
+                if self.tracked_remotes:
+                    if (src_ip, sport) in self.tracked_remotes:
+                        k_in = (src_ip, sport, '0.0.0.0', dport)
+                        if k_in not in self.tracked:
+                            self.tracked[k_in] = {'buf': bytearray(), 'dir': 'IN ←',
+                                                   'remote': f'{src_ip}:{sport}',
+                                                   'rem_ip': src_ip, 'rem_port': sport,
+                                                   'local_port': dport}
+                    elif (dst_ip, dport) in self.tracked_remotes:
+                        k_out = ('0.0.0.0', sport, dst_ip, dport)
+                        if k_out not in self.tracked:
+                            self.tracked[k_out] = {'buf': bytearray(), 'dir': 'OUT→',
+                                                    'remote': f'{dst_ip}:{dport}',
+                                                    'rem_ip': dst_ip, 'rem_port': dport,
+                                                    'local_port': sport}
                 for (r_ip, r_port, l_ip, l_port), info in list(self.tracked.items()):
                     if ((src_ip == r_ip and sport == r_port and dport == l_port) or
                         (dst_ip == r_ip and dport == r_port and sport == l_port)):
@@ -2116,6 +2145,12 @@ def main():
                     # Auch private IPs tracken (z.B. VPN-Tunnel, lokale Tests)
                     if sniff_ok:
                         sniffer.track(rem_ip, rem_port, local_port)
+                        # Zusätzlich den Remote-Endpunkt dauerhaft vormerken: deckt
+                        # schnelle Connect-Senden-Schließen-Zyklen ab, die beim
+                        # nächsten 1.5s-Scan schon wieder im TIME_WAIT sind und so
+                        # nie über track() mit dem richtigen lokalen Port erfasst
+                        # würden (z.B. Poll-Style C2 mit neuem Port pro Request).
+                        sniffer.track_remote(rem_ip, rem_port)
 
                     # C2-Port?
                     c2_label = C2_PORTS.get(rem_port)
@@ -2219,6 +2254,10 @@ def main():
                         alert(sev,
                             f"BEACONING – {count}x zu {rem_ip}:{rem_port} in {beacon.window}s [{scope}]",
                             'Regelmäßige Verbindungen → mögliches C2-Polling')
+                        # Fallback: falls die einzelnen Connects bereits vor track()
+                        # verpasst wurden, ab jetzt sicher jeden Request erfassen.
+                        if sniff_ok:
+                            sniffer.track_remote(rem_ip, rem_port)
 
             # ── Neue Prozesse ─────────────────────────────────────────
             current_pids = get_procs()
