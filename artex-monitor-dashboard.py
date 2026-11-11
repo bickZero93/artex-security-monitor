@@ -1473,13 +1473,18 @@ class Handler(BaseHTTPRequestHandler):
         """Beendet den Reverse-Shell-Prozess via SIGKILL im Container."""
         with _state_lock:
             sess = sessions.get(remote, {})
+            if sess.get('ended'):
+                self._json({'ok': False, 'error': 'Session bereits beendet',
+                            'outcome': 'already_ended', 'remote': remote,
+                            'ts': sess['ended']})
+                return
             pid  = sess.get('pid')
             udp_local_port = sess.get('udp_local_port')
 
         result = _do_kill(remote, pid, udp_local_port)
+        ts_now = _container_ts()
         if result['ok']:
             # Session als beendet markieren — nur broadcasten wenn nicht schon beendet
-            ts_now = _container_ts()
             already_was_ended = False
             with _state_lock:
                 if remote in sessions:

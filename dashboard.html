@@ -2302,6 +2302,9 @@ function markEnded(remote, ended) {
     pnl.insertBefore(b, pnl.querySelector('.terminal'));
   }
   b.textContent = '✓ Session beendet um ' + ended;
+  // Kill-Button deaktivieren (Session ist vorbei, keine PID mehr gültig)
+  const killBtn = document.getElementById('killbtn-' + ky);
+  if (killBtn) { killBtn.disabled = true; killBtn.classList.add('killed'); killBtn.textContent = '✓ Session beendet'; }
   // Sidebar-Item als beendet markieren
   const item = document.getElementById('ssb-' + ky);
   if (item) {
@@ -2360,6 +2363,13 @@ function startDuration(remote, ky) {
 async function killSession(remote) {
   const ky  = k(remote);
   const btn = document.getElementById('killbtn-' + ky);
+
+  // Session bereits beendet → Kill-Button still setzen, nichts senden
+  if (sessions[remote]?.ended) {
+    if (btn) { btn.disabled = true; btn.classList.add('killed'); btn.textContent = '✓ Session beendet'; }
+    return;
+  }
+
   const pid = sessions[remote]?.pid || '?';
 
   if (!confirm(
