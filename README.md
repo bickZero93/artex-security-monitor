@@ -59,16 +59,19 @@ The monitor script is automatically copied into the container by `start-dashboar
 ## Screenshots
 
 ### Übersicht (Overview)
-![Overview](screenshots/overview.jpg)
+![Overview](screenshots/01_overview.png)
 
 ### Monitor-Modus (Event Stream)
-![Monitor Mode](screenshots/monitor-mode.jpg)
+![Monitor Mode](screenshots/02_monitor.png)
 
 ### Bedrohungen (Active Threats)
-![Threats](screenshots/threats.jpg)
+![Threats](screenshots/03_threats.png)
+
+### Sessions
+![Sessions](screenshots/04_sessions.png)
 
 ### Schutz & Automatisierung (Protection)
-![Protection](screenshots/protection.jpg)
+![Protection](screenshots/05_protection.png)
 
 ---
 
