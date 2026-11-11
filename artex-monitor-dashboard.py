@@ -1296,6 +1296,9 @@ def _run_once() -> None:
                     _ak_pid          = None
                     _ak_udp_port     = None
                     _needs_pid_lookup = False
+                    _impl_lookup_pid  = None   # IMPLANT-PID für Socket-Lookup nach dem Lock
+                    _syn_session_ev   = None   # synthetische Session (NEUE VERBINDUNG)
+                    _syn_stats_ev     = None
                     _IP_D  = re.compile(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+)')
                     _PID_D = re.compile(r'PID=(\d+)')
                     _UDP_D = re.compile(r'UDP_LOCAL=(\d+)')
@@ -1334,6 +1337,51 @@ def _run_once() -> None:
                                             _ak_remote = r_key
                                             _ak_pid    = pid_v
                                             _ak_udp_port = udp_m.group(1) if udp_m else None
+
+                                # IMPLANT: PID steht im Detail, nicht in der Meldung.
+                                # Socket-Lookup nach dem Lock vormerken + PID für spätere
+                                # NEUE VERBINDUNG-Zuordnung merken (Watchdog→Worker-Lücke).
+                                if 'IMPLANT' in smsg:
+                                    pid_m_impl = _PID_D.search(ev['detail'])
+                                    if pid_m_impl:
+                                        _impl_pid_str = pid_m_impl.group(1)
+                                        if not any(not s.get('ended') for s in sessions.values()):
+                                            _impl_lookup_pid = _impl_pid_str
+                                        _pending_implant_pids.add(_impl_pid_str)
+
+                                # NEUE VERBINDUNG: wenn PID zu einem bekannten Implant
+                                # gehört, synthetische Session direkt aus dem
+                                # Verbindungs-Event bauen (kein docker exec nötig).
+                                if 'NEUE VERBINDUNG' in smsg and _pending_implant_pids:
+                                    pid_m_nv = _PID_D.search(ev['detail'])
+                                    if pid_m_nv and pid_m_nv.group(1) in _pending_implant_pids:
+                                        ip_m_nv = _IP_D.search(smsg)
+                                        if ip_m_nv:
+                                            _nv_remote = ip_m_nv.group(1)
+                                            _nv_pid    = pid_m_nv.group(1)
+                                            if (_nv_remote not in sessions or
+                                                    sessions[_nv_remote].get('ended')):
+                                                _nv_ts = stored.get('ts',
+                                                    datetime.now().strftime('%H:%M:%S'))
+                                                sessions[_nv_remote] = {
+                                                    'remote':  _nv_remote,
+                                                    'started': _nv_ts,
+                                                    'ended':   None, 'cmds': [],
+                                                    'logfile': '',
+                                                    'pid':     _nv_pid,
+                                                    'pids':    [_nv_pid],
+                                                }
+                                                stats['SESSION'] = stats.get('SESSION', 0) + 1
+                                                _syn_session_ev = {
+                                                    'type': 'session_open',
+                                                    'remote': _nv_remote,
+                                                    'started': _nv_ts, 'pid': _nv_pid,
+                                                    'synthetic': True}
+                                                _syn_stats_ev = {
+                                                    'type': 'stats',
+                                                    'stats': copy.copy(stats),
+                                                    'sessions': len(sessions)}
+                                            _pending_implant_pids.discard(_nv_pid)
                                 break
 
                     # Broadcasts AUSSERHALB des Locks (kein Deadlock)
@@ -1344,6 +1392,52 @@ def _run_once() -> None:
                     # Neue UDP-Session ohne PID → PID im Hintergrund nachschlagen
                     if _needs_pid_lookup:
                         threading.Timer(1.5, _lookup_missing_pids).start()
+
+                    # Synthetische Session aus NEUE VERBINDUNG (IMPLANT-Zuordnung)
+                    if _syn_session_ev:
+                        broadcast(_syn_session_ev)
+                        broadcast(_syn_stats_ev)
+                        print(f"[IMPLANT-SYN] Session via NEUE VERBINDUNG: "
+                              f"{_syn_session_ev['remote']} (PID {_syn_session_ev['pid']})",
+                              flush=True)
+
+                    # IMPLANT ohne Session: Socket-Lookup per docker exec versuchen
+                    # (deckt den Fall ab, dass die TCP-Verbindung schon vor der
+                    # Implant-Erkennung bestand, z.B. Watchdog→Worker bereits aktiv).
+                    if _impl_lookup_pid:
+                        try:
+                            _syn_remote2 = _implant_pid_remote(_impl_lookup_pid)
+                            if _syn_remote2:
+                                _do_syn2 = False
+                                _syn_ts2 = _container_ts()
+                                _syn_stats2 = None
+                                with _state_lock:
+                                    if (_syn_remote2 not in sessions or
+                                            sessions[_syn_remote2].get('ended')):
+                                        sessions[_syn_remote2] = {
+                                            'remote':  _syn_remote2,
+                                            'started': _syn_ts2,
+                                            'ended':   None, 'cmds': [], 'logfile': '',
+                                            'pid':     _impl_lookup_pid,
+                                            'pids':    [_impl_lookup_pid],
+                                        }
+                                        stats['SESSION'] = stats.get('SESSION', 0) + 1
+                                        _syn_stats2 = copy.copy(stats)
+                                        _do_syn2 = True
+                                        _pending_implant_pids.discard(_impl_lookup_pid)
+                                if _do_syn2:
+                                    broadcast({'type': 'session_open',
+                                               'remote': _syn_remote2,
+                                               'started': _syn_ts2,
+                                               'pid': _impl_lookup_pid,
+                                               'synthetic': True})
+                                    broadcast({'type': 'stats', 'stats': _syn_stats2,
+                                               'sessions': len(sessions)})
+                                    print(f"[IMPLANT-SYN] Session via Socket-Lookup: "
+                                          f"{_syn_remote2} (PID {_impl_lookup_pid})",
+                                          flush=True)
+                        except Exception as _e:
+                            print(f"[IMPLANT-SYN] Fehler: {_e}", flush=True)
 
                     # Autokill AUSSERHALB des Locks (subprocess.run + broadcast)
                     if _ak_remote and _ak_pid:
