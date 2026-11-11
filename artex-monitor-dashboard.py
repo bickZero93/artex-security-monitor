@@ -1097,16 +1097,8 @@ def process_event(ev: dict) -> None:
                    'msg': _an_result.get('msg', ''),
                    'ts': _container_ts()})
 
-    # Auto-Entfernen: zugehörigen Implant-Prozess ebenfalls beenden
-    # (kill_pid broadcastet bereits 'implant_cleared' für die UI-Banner).
-    if _impl_kill_pid:
-        _ik_result = _apply_countermeasure('kill_pid', _impl_kill_pid)
-        broadcast({'type': 'auto_neutralize_applied',
-                   'ok': _ik_result.get('ok', False),
-                   'msg': _ik_result.get('msg', ''),
-                   'ts': _container_ts()})
-
     # Synthethische Session: IMPLANT ohne TUNNEL SESSION AKTIV
+    # VOR dem Auto-Kill prüfen, damit die PID noch in /proc vorhanden ist.
     # Passiert wenn die Shell als Implant-Prozess erkannt wurde, bevor das
     # Netzwerk-Tracking die TCP-Verbindung als Session registriert hat.
     if _implant_no_session_pid:
@@ -1138,6 +1130,15 @@ def process_event(ev: dict) -> None:
                           f' (PID {_implant_no_session_pid})', flush=True)
         except Exception as _e:
             print(f'[IMPLANT-SYN] Fehler: {_e}', flush=True)
+
+    # Auto-Entfernen: zugehörigen Implant-Prozess ebenfalls beenden
+    # (kill_pid broadcastet bereits 'implant_cleared' für die UI-Banner).
+    if _impl_kill_pid:
+        _ik_result = _apply_countermeasure('kill_pid', _impl_kill_pid)
+        broadcast({'type': 'auto_neutralize_applied',
+                   'ok': _ik_result.get('ok', False),
+                   'msg': _ik_result.get('msg', ''),
+                   'ts': _container_ts()})
 
 # ── Monitor Subprocess ──────────────────────────────────────────────────
 def _check_privileged() -> bool:
