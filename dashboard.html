@@ -1287,7 +1287,9 @@ async function syncNetworkInfo() {
   } catch(_) {}
 }
 
+let _lastSyncTs = 0;
 async function syncSessions() {
+  _lastSyncTs = Date.now();
   try {
     const resp = await fetch('/api/sessions', {cache: 'no-store'});
     if (!resp.ok) return;
@@ -1302,6 +1304,11 @@ async function syncSessions() {
         const pidEl = document.getElementById('killpid-' + k(s.remote));
         if (pidEl) pidEl.textContent = s.pid;
         _ensurePidShell(s.remote, s.pid, s.started);
+      }
+      // Session war aktiv, ist jetzt beendet → Shell-Gruppen im Terminal nachziehen
+      if (s.ended && !wasEnded && wasKnown) {
+        const ePids = (s.ended_pids || [s.ended_pid]).filter(Boolean);
+        markShellsEnded(s.remote, ePids.length ? ePids : [s.pid], s.ended, s.ended_reason || 'closed');
       }
       if (!s.ended && (!wasKnown || wasEnded)) {
         switchTab('sess-' + k(s.remote));
@@ -1814,6 +1821,8 @@ function switchTab(id) {
   const pnl = document.getElementById('panel-' + id);
   if (tab) { tab.classList.add('on'); clearBadge(id); }
   if (pnl) pnl.classList.add('on');
+  // Beim Wechsel zum Sessions-Tab: Sync wenn >10s seit letztem Sync
+  if (id === 'sessions' && Date.now() - _lastSyncTs > 10000) syncSessions();
 }
 
 // Selektiert eine Session im Detail-Panel
@@ -1922,7 +1931,7 @@ function ensureSess(remote, started, logfile, ended) {
   if (sessionTabs.has(remote)) {
     const s = sessions[remote];
     if (s) {
-      if (ended && !s.ended) s.ended = ended;
+      if (ended && !s.ended) { s.ended = ended; markEnded(remote, ended); }
       if (!ended && s.ended) _reactivateSess(remote, started);
     }
     return;
@@ -2918,6 +2927,14 @@ function _setNiUI(netInfo) {
 // Start
 connect();
 checkRootkitState();
+
+// Beim Zurückkehren zum Browser-Tab: Sync wenn >10s seit letztem Sync
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && Date.now() - _lastSyncTs > 10000) syncSessions();
+});
+
+// Periodischer Hintergrund-Sync alle 30s (fängt verpasste SSE-Events auf)
+setInterval(() => { if (!document.hidden) syncSessions(); }, 30000);
 </script>
 </body>
 </html>
