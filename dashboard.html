@@ -1,0 +1,2859 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Security-Monitoring</title>
+<style>
+:root {
+  --bg:       #0d1117;
+  --bg2:      #161b22;
+  --bg3:      #21262d;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --dim:      #7d8590;
+  --dim2:     #484f58;
+  --crit:     #f85149;
+  --high:     #fb8f44;
+  --med:      #e3b341;
+  --low:      #3fb950;
+  --info:     #58a6ff;
+  --sess:     #bc8cff;
+  --font:     'Cascadia Code','JetBrains Mono','Fira Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;display:flex;flex-direction:row}
+
+/* ─── Sidebar ────────────────────────────────────────────────── */
+.sidebar{
+  width:214px;min-width:214px;height:100%;
+  background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0;
+  user-select:none;overflow:hidden;
+}
+.sb-brand{
+  padding:13px 15px 11px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:9px;
+}
+.sb-logo{font-size:17px;line-height:1;flex-shrink:0}
+.sb-brand-txt{min-width:0}
+.sb-title{font-size:13px;font-weight:800;color:var(--crit);letter-spacing:1.4px;line-height:1.1}
+.sb-sub{font-size:8.5px;color:var(--dim2);letter-spacing:1.2px;margin-top:2px}
+.sb-status{
+  padding:8px 15px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:7px;
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--dim2);transition:background .3s;flex-shrink:0}
+.dot.on{background:var(--low);box-shadow:0 0 5px var(--low)}
+.dot.err{background:var(--crit);box-shadow:0 0 5px var(--crit)}
+.hdr-lbl{color:var(--dim);font-size:10px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-nav{flex:1;padding:7px 0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+.sb-nav::-webkit-scrollbar{width:4px}
+.sb-nav::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.sb-sec{
+  padding:11px 15px 5px;font-size:8.5px;font-weight:700;color:var(--dim2);
+  letter-spacing:1px;text-transform:uppercase;
+}
+.sb-foot{
+  padding:8px 15px;border-top:1px solid var(--border);
+  font-size:9px;color:var(--dim2);display:flex;align-items:center;gap:6px;
+}
+
+/* ─── Main area ──────────────────────────────────────────────── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.panel-head{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:11px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.panel-head-ico{font-size:15px;flex-shrink:0}
+.panel-head-txt{min-width:0;flex:1}
+.panel-head-title{font-size:13.5px;font-weight:700;color:var(--text);line-height:1.2}
+.panel-head-sub{font-size:10.5px;color:var(--dim);margin-top:2px}
+
+.pills{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.pill{
+  padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;
+  cursor:pointer;border:1px solid transparent;transition:all .12s;user-select:none;
+}
+.pill.on{border-color:currentColor}
+.pill:hover{opacity:.8}
+.p-crit{color:var(--crit);background:#f8514914}
+.p-high{color:var(--high);background:#fb8f4414}
+.p-med {color:var(--med); background:#e3b34114}
+.p-low {color:var(--low); background:#3fb95014}
+.p-info{color:var(--info);background:#58a6ff14}
+.p-sess{color:var(--sess);background:#bc8cff14}
+.p-http{color:#64748b;background:#64748b14}
+.hdr-btn{
+  background:none;border:1px solid var(--border);color:var(--dim);
+  padding:3px 9px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px;
+}
+.hdr-btn:hover{background:var(--bg3);color:var(--text)}
+
+/* ─── Search bar ────────────────────────────────────────────── */
+.search-bar{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:5px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+.search-bar input{
+  flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:5px;
+  color:var(--text);font-family:inherit;font-size:12px;padding:4px 10px;outline:none;
+}
+.search-bar input:focus{border-color:var(--info)}
+.search-bar input::placeholder{color:var(--dim)}
+.search-cnt{color:var(--dim);font-size:11px;min-width:80px;text-align:right}
+
+/* ─── Sidebar Nav-Items ─────────────────────────────────────── */
+.tab{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 15px;cursor:pointer;font-size:12px;color:var(--dim);
+  border-left:3px solid transparent;
+  white-space:nowrap;transition:background .12s,color .12s,border-color .12s;
+  user-select:none;
+}
+.tab:hover{color:var(--text);background:var(--bg3)}
+.tab.on{
+  color:var(--text);font-weight:600;
+  background:linear-gradient(90deg,var(--bg3),transparent 92%);
+  border-left-color:var(--dim);
+}
+.tab.on.t-monitor   {border-left-color:var(--info)}
+.tab.on.t-sessions  {border-left-color:var(--crit)}
+.tab.on.t-threat    {border-left-color:#ff6b6b}
+.tab.on.t-protection{border-left-color:var(--low)}
+.tab-ico{font-size:13px;width:17px;text-align:center;flex-shrink:0}
+.tab-txt{flex:1;overflow:hidden;text-overflow:ellipsis}
+.tab-ind{width:6px;height:6px;border-radius:50%;flex-shrink:0;display:none}
+.t-sessions.has-live .tab-ind{display:block;background:var(--crit);animation:pulse 1.4s infinite}
+.t-threat.has-live  .tab-ind{display:block;background:#ff6b6b;animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.tab-badge{
+  background:var(--crit);color:#fff;font-size:9px;font-weight:700;
+  padding:1px 5px;border-radius:8px;min-width:18px;text-align:center;
+  animation:badgein .2s ease;display:none;flex-shrink:0;
+}
+.tab-badge.show{display:inline-block}
+@keyframes badgein{from{transform:scale(.5)}to{transform:scale(1)}}
+
+/* ─── Panel container ───────────────────────────────────────── */
+.panels{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.panel{flex:1;display:none;flex-direction:column;overflow:hidden;min-height:0}
+.panel.on{display:flex}
+
+/* ─── Monitor Filterbar ─────────────────────────────────────── */
+.filterbar{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:7px 18px;display:flex;align-items:center;gap:9px;
+  flex-shrink:0;flex-wrap:wrap;
+}
+.filterbar-lbl{
+  font-size:9px;font-weight:700;color:var(--dim2);
+  letter-spacing:1px;text-transform:uppercase;flex-shrink:0;
+}
+.filterbar-sep{width:1px;height:16px;background:var(--border);flex-shrink:0}
+.filterbar-hint{font-size:9.5px;color:var(--dim2);flex-shrink:0}
+
+/* ─── Overview Panel ────────────────────────────────────────── */
+#panel-overview{overflow:hidden}
+.ov-body{flex:1;overflow-y:auto;padding:18px;scrollbar-width:thin}
+.ov-body::-webkit-scrollbar{width:6px}
+.ov-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.ov-sec{
+  font-size:9.5px;font-weight:700;color:var(--dim);letter-spacing:1.1px;
+  text-transform:uppercase;margin:0 0 10px;padding-bottom:7px;
+  border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;
+}
+.ov-sec:not(:first-child){margin-top:24px}
+.ov-sec-cnt{margin-left:auto;font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim2)}
+.ov-tiles{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));
+  gap:9px;
+}
+.ov-tile{
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:12px 13px;display:flex;flex-direction:column;gap:5px;
+  cursor:pointer;transition:border-color .15s,background .15s;
+}
+.ov-tile:hover{border-color:var(--dim2);background:var(--bg3)}
+.ov-tile-lbl{font-size:9px;font-weight:700;color:var(--dim);letter-spacing:.7px}
+.ov-tile-val{font-size:26px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.ov-tile.t-crit .ov-tile-val{color:var(--crit)}
+.ov-tile.t-high .ov-tile-val{color:var(--high)}
+.ov-tile.t-med  .ov-tile-val{color:var(--med)}
+.ov-tile.t-low  .ov-tile-val{color:var(--low)}
+.ov-tile.t-info .ov-tile-val{color:var(--info)}
+.ov-tile.t-sess .ov-tile-val{color:var(--sess)}
+.ov-tile.t-crit{border-top:2px solid #f8514955}
+.ov-tile.t-high{border-top:2px solid #fb8f4455}
+.ov-tile.t-sess{border-top:2px solid #bc8cff55}
+
+.ov-prot{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px}
+.ov-prot-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:11px 13px;display:flex;align-items:center;gap:11px;
+  cursor:pointer;transition:border-color .15s,background .15s;
+}
+.ov-prot-card:hover{border-color:var(--dim2);background:var(--bg3)}
+.ov-prot-ico{font-size:17px;flex-shrink:0;opacity:.85}
+.ov-prot-txt{flex:1;min-width:0}
+.ov-prot-name{font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ov-prot-state{font-size:9.5px;font-weight:700;letter-spacing:.6px;margin-top:3px}
+.ov-prot-state.st-off{color:var(--dim2)}
+.ov-prot-state.st-on {color:var(--crit)}
+.ov-prot-state.st-warn{color:#ff8c00}
+.ov-prot-state.st-iso{color:#60a5fa}
+
+.ov-prot-net{
+  font-size:9px;color:var(--dim2);margin-top:3px;line-height:1.4;
+  word-break:break-word;
+}
+.ov-prot-card.is-iso .ov-prot-net{color:#60a5fa}
+
+/* ─── Gesperrte Ziele ───────────────────────────────────────── */
+.ov-blocks{display:flex;flex-wrap:wrap;gap:7px}
+.ov-blk{
+  display:flex;align-items:center;gap:8px;
+  background:var(--bg2);border:1px solid #ffa50040;border-radius:7px;
+  padding:7px 11px;font-size:11px;
+}
+.ov-blk-ico{font-size:12px;flex-shrink:0;opacity:.85}
+.ov-blk-kind{
+  font-size:8.5px;font-weight:700;letter-spacing:.7px;color:#ffa500;
+  background:#ffa50018;border:1px solid #ffa50040;border-radius:9px;
+  padding:1px 6px;flex-shrink:0;
+}
+.ov-blk-val{color:var(--text);font-weight:600}
+.ov-blk-x{
+  background:none;border:1px solid var(--border);color:var(--dim);
+  border-radius:4px;padding:1px 6px;font-family:inherit;font-size:10px;
+  cursor:pointer;transition:all .15s;flex-shrink:0;
+}
+.ov-blk-x:hover:not(:disabled){background:#22c55e18;border-color:#22c55e60;color:#22c55e}
+.ov-blk-x:disabled{opacity:.45;cursor:not-allowed}
+
+.ov-recent{display:flex;flex-direction:column;gap:4px}
+.ov-ri{
+  display:flex;align-items:center;gap:9px;
+  padding:6px 11px;background:var(--bg2);border-radius:5px;
+  border-left:3px solid var(--border);font-size:11px;
+  cursor:pointer;transition:background .12s;
+}
+.ov-ri:hover{background:var(--bg3)}
+.ov-ri.CRITICAL{border-left-color:var(--crit)}
+.ov-ri.HIGH    {border-left-color:var(--high)}
+.ov-ri.MEDIUM  {border-left-color:var(--med)}
+.ov-ri.LOW     {border-left-color:var(--low)}
+.ov-ri.INFO    {border-left-color:var(--info)}
+.ov-ri.SESSION {border-left-color:var(--sess)}
+.ov-ri-ts{color:var(--dim);font-size:10px;min-width:58px;flex-shrink:0}
+.ov-ri-msg{flex:1;min-width:0;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ov-empty{
+  padding:26px 14px;text-align:center;color:var(--dim2);font-size:11px;
+  background:var(--bg2);border:1px dashed var(--border);border-radius:8px;
+}
+
+/* ─── Protection Panel ──────────────────────────────────────── */
+#panel-protection{overflow:hidden}
+.prot-body{flex:1;overflow-y:auto;padding:18px;scrollbar-width:thin}
+.prot-body::-webkit-scrollbar{width:6px}
+.prot-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.prot-cards{display:flex;flex-direction:column;gap:13px;max-width:780px}
+.prot-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:9px;overflow:hidden;
+  transition:border-color .2s;
+}
+.prot-card.is-on{border-color:#f8514955;box-shadow:0 0 14px #f8514910}
+.prot-card.is-on-warn{border-color:#ff8c0055;box-shadow:0 0 14px #ff8c0010}
+.prot-card.is-on-iso{border-color:#3b82f655;box-shadow:0 0 14px #3b82f610}
+.prot-hdr{
+  padding:13px 15px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid var(--border);flex-wrap:wrap;
+}
+.prot-ico{font-size:19px;flex-shrink:0;opacity:.9}
+.prot-info{flex:1;min-width:170px}
+.prot-title{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.3}
+.prot-sub{font-size:10.5px;color:var(--dim);margin-top:3px;line-height:1.45}
+.prot-body-in{padding:12px 15px;display:flex;flex-direction:column;gap:8px}
+.prot-desc{font-size:11px;color:var(--dim);line-height:1.6}
+.prot-row{
+  display:flex;gap:9px;align-items:flex-start;
+  font-size:10.5px;line-height:1.5;padding:7px 10px;border-radius:5px;
+}
+.prot-row-k{font-weight:700;flex-shrink:0;min-width:62px}
+.prot-eff{background:var(--bg3);color:var(--dim)}
+.prot-eff .prot-row-k{color:var(--low)}
+.prot-eff code{color:#a8f0b0;font-family:inherit;font-size:10px}
+.prot-warn{background:#fb8f440e;border:1px solid #fb8f4428;color:#f0b98a}
+.prot-warn .prot-row-k{color:var(--high)}
+.prot-state-badge{
+  font-size:9px;font-weight:700;letter-spacing:.7px;padding:3px 8px;
+  border-radius:10px;flex-shrink:0;border:1px solid transparent;
+}
+.prot-state-badge.st-off{background:var(--bg3);color:var(--dim2);border-color:var(--border)}
+.prot-state-badge.st-on {background:#f8514920;color:var(--crit);border-color:#f8514960}
+.prot-state-badge.st-warn{background:#ff8c0020;color:#ff8c00;border-color:#ff8c0060}
+.prot-state-badge.st-iso{background:#3b82f620;color:#60a5fa;border-color:#3b82f660}
+
+/* ─── Monitor feed ──────────────────────────────────────────── */
+#feed{flex:1;overflow-y:auto;padding:2px 0;scrollbar-width:thin}
+#feed::-webkit-scrollbar{width:5px}
+#feed::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.arow{padding:5px 14px;border-left:3px solid transparent;animation:fin .18s ease}
+.arow:hover{background:var(--bg2)}
+.arow.hidden{display:none}
+@keyframes fin{from{opacity:0;transform:translateY(-3px)}to{opacity:1}}
+.arow.CRITICAL{border-left-color:var(--crit)}
+.arow.HIGH    {border-left-color:var(--high)}
+.arow.MEDIUM  {border-left-color:var(--med)}
+.arow.LOW     {border-left-color:var(--low)}
+.arow.INFO    {border-left-color:var(--info)}
+.arow.SESSION {border-left-color:var(--sess)}
+.arow.SESSION.shell-alert {
+  border-left-color:var(--crit);border-left-width:4px;
+  background:linear-gradient(90deg,#f8514912 0%,transparent 60%);
+  animation:fin .18s ease, shellpulse 2s ease-in-out 3;
+}
+@keyframes shellpulse{0%,100%{background:linear-gradient(90deg,#f8514912 0%,transparent 60%)}50%{background:linear-gradient(90deg,#f8514930 0%,transparent 60%)}}
+.arow.HTTP    {border-left-color:#475569;opacity:.7}
+.s-HTTP       {background:#47556918;color:#94a3b8}
+.arow-meta{display:flex;align-items:center;gap:6px;margin-bottom:1px}
+.arow-ts{color:var(--dim);font-size:10px}
+.arow-sev{font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.3px}
+.s-CRITICAL{background:#f8514918;color:var(--crit)}
+.s-HIGH    {background:#fb8f4418;color:var(--high)}
+.s-MEDIUM  {background:#e3b34118;color:var(--med)}
+.s-LOW     {background:#3fb95018;color:var(--low)}
+.s-INFO    {background:#58a6ff18;color:var(--info)}
+.s-SESSION {background:#bc8cff18;color:var(--sess)}
+.arow-msg{color:var(--text);word-break:break-word}
+.arow-det{color:var(--dim);font-size:11px;margin-top:2px;padding-left:3px;line-height:1.5}
+.arow-cm{margin-top:5px;padding-left:3px;display:flex;flex-wrap:wrap;gap:5px}
+
+/* ─── Threats panel ─────────────────────────────────────────── */
+.threat-hdr{
+  background:linear-gradient(135deg,#1a0608,#160a0a);
+  border-bottom:1px solid #f8514930;
+  padding:9px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.threat-pulse{width:9px;height:9px;border-radius:50%;background:#ff6b6b;box-shadow:0 0 7px #ff6b6b;animation:pulse 1.4s infinite;flex-shrink:0}
+#threat-feed{flex:1;overflow-y:auto;min-height:0;padding:8px 10px;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin}
+#threat-feed::-webkit-scrollbar{width:5px}
+#threat-feed::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* Threat Cards */
+.tcard{
+  border:1px solid #f8514955;border-radius:8px;
+  background:#0d111788;overflow:hidden;
+  box-shadow:0 0 14px #f8514912;animation:fin .2s ease;flex-shrink:0;
+}
+.tcard.tcard-resolved{
+  border-color:#30363d;box-shadow:none;background:#0d111755;
+  filter:grayscale(.6);opacity:.55;
+}
+.tcard-hdr{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 13px;
+  background:linear-gradient(90deg,#f8514928,#bc8cff10 70%,transparent);
+  border-bottom:1px solid #f8514930;
+}
+.tcard-pulse{width:8px;height:8px;border-radius:50%;background:var(--crit);
+  box-shadow:0 0 6px var(--crit);animation:pulse 1.2s infinite;flex-shrink:0}
+.tcard-title{color:var(--crit);font-weight:700;font-size:12.5px;flex:1;word-break:break-all}
+.tcard-since{color:var(--dim);font-size:10px;white-space:nowrap}
+.tcard-actions{margin-left:8px}
+.tcard-action{
+  background:#ff444420;border:1px solid #ff444460;
+  color:var(--crit);padding:4px 13px;border-radius:5px;cursor:pointer;
+  font-family:inherit;font-size:11.5px;font-weight:600;
+  transition:all .15s;white-space:nowrap;
+}
+.tcard-action:hover:not(:disabled){background:#ff444440;border-color:var(--crit);box-shadow:0 0 8px #ff444430}
+.tcard-action:disabled{opacity:.45;cursor:not-allowed}
+.tcard-done{color:var(--low);font-size:11px;font-weight:700}
+.tcard-log{padding:6px 12px 10px;display:flex;flex-direction:column;gap:4px}
+.tcard-line{display:flex;align-items:baseline;gap:7px;font-size:11px;padding:2px 0;
+  border-bottom:1px solid #30363d33}
+.tcard-line .tl-ts{color:var(--dim);font-size:10px;min-width:62px;flex-shrink:0}
+.cm-btn{background:#1e293b;border:1px solid #ef4444;color:#fca5a5;font-size:10px;padding:2px 8px;border-radius:4px;cursor:pointer;font-family:inherit;transition:background .15s}
+.cm-btn:hover:not(:disabled){background:#ef444430}
+.cm-btn:disabled{opacity:.5;cursor:default}
+.feed-foot{
+  background:var(--bg2);border-top:1px solid var(--border);
+  padding:4px 14px;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--dim);
+  flex-shrink:0;
+}
+.feed-foot label{cursor:pointer;display:flex;align-items:center;gap:5px}
+.empty-feed{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:10px;color:var(--dim2);
+}
+.empty-feed .ico{font-size:40px;opacity:.2}
+.empty-feed p{font-size:12px}
+
+/* ─── Sessions two-column layout ─────────────────────────────── */
+.sessions-wrap{display:flex;flex:1;overflow:hidden}
+.sess-sidebar{
+  width:240px;min-width:160px;
+  background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;
+}
+.sess-sidebar-hdr{
+  padding:9px 12px 8px;font-size:10px;font-weight:700;
+  color:var(--dim);letter-spacing:.8px;text-transform:uppercase;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:7px;flex-shrink:0;
+}
+.sess-sidebar-hdr-cnt{
+  margin-left:auto;font-size:10px;color:var(--dim2);
+  font-weight:400;text-transform:none;letter-spacing:0;
+}
+.sess-sidebar-list{flex:1;overflow-y:auto;scrollbar-width:thin}
+.sess-sidebar-list::-webkit-scrollbar{width:4px}
+.sess-sidebar-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.sess-list-item{
+  display:flex;align-items:center;gap:8px;
+  padding:9px 11px;cursor:pointer;
+  border-bottom:1px solid #30363d44;
+  border-left:2px solid transparent;
+  transition:background .12s, border-color .12s;
+}
+.sess-list-item:hover{background:var(--bg3)}
+.sess-list-item.on{
+  background:linear-gradient(90deg,#f8514915,transparent);
+  border-left-color:var(--crit);
+}
+.sess-list-item.sess-ended{opacity:.5}
+.sli-pulse{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--crit);box-shadow:0 0 5px var(--crit);
+  animation:pulse 1.4s infinite;flex-shrink:0;
+}
+.sess-list-item.sess-ended .sli-pulse{
+  animation:none;background:var(--dim2);box-shadow:none;
+}
+.sli-info{flex:1;min-width:0;overflow:hidden}
+.sli-remote{
+  font-size:11.5px;font-weight:600;color:var(--text);
+  display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.sli-time{font-size:10px;color:var(--dim);display:block;margin-top:1px}
+.sli-rk{font-size:12px;color:#ff8c00;flex-shrink:0;cursor:default;display:none}
+.sli-badge{
+  background:var(--crit);color:#fff;font-size:9px;font-weight:700;
+  padding:1px 5px;border-radius:8px;min-width:16px;text-align:center;
+  display:none;flex-shrink:0;
+}
+.sli-badge.show{display:inline-block}
+.sli-x{
+  font-size:14px;line-height:1;color:var(--dim2);
+  padding:1px 3px;border-radius:3px;flex-shrink:0;
+}
+.sli-x:hover{color:var(--crit);background:#f8514920}
+.sess-sidebar-empty{
+  padding:30px 12px;color:var(--dim2);font-size:11px;
+  text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+.sess-sidebar-empty .ico{font-size:32px;opacity:.18}
+
+/* ─── Session detail pane ───────────────────────────────────── */
+.sess-detail-wrap{
+  flex:1;overflow:hidden;display:flex;flex-direction:column;
+}
+.sess-detail-empty{
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;flex:1;color:var(--dim2);gap:10px;
+}
+.sess-detail-empty .ico{font-size:48px;opacity:.12}
+.sess-detail-empty p{font-size:12px}
+/* Session-panels inside detail wrap */
+#sess-detail-wrap > [id^="panel-sess-"]{
+  display:none;flex-direction:column;flex:1;overflow:hidden;
+}
+#sess-detail-wrap > [id^="panel-sess-"].shown{display:flex}
+
+/* ─── Session panel content ─────────────────────────────────── */
+.sess-hdr{
+  background:linear-gradient(135deg,#1a0608,#13101a);
+  border-bottom:1px solid #f8514930;
+  padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;
+  flex-wrap:wrap;
+}
+.sess-pulse{width:9px;height:9px;border-radius:50%;background:var(--crit);box-shadow:0 0 7px var(--crit);animation:pulse 1.2s infinite;flex-shrink:0}
+.sess-remote{color:var(--crit);font-weight:700;font-size:13px}
+.sess-since{color:var(--dim);font-size:11px}
+.sess-dur{color:var(--sess);font-size:11px;font-style:italic}
+.sess-stats{margin-left:auto;display:flex;gap:16px;font-size:11px;color:var(--dim)}
+.sess-stats b{color:var(--text)}
+.kill-btn{
+  margin-left:12px;background:#ff444420;border:1px solid #ff444460;
+  color:var(--crit);padding:4px 12px;border-radius:5px;cursor:pointer;
+  font-family:inherit;font-size:12px;font-weight:600;
+  transition:all .15s;white-space:nowrap;
+}
+.kill-btn:hover{background:#ff444440;border-color:var(--crit);box-shadow:0 0 8px #ff444440}
+.kill-btn:disabled{opacity:.4;cursor:not-allowed}
+.kill-btn.killed{background:#22c55e20;border-color:var(--low);color:var(--low)}
+
+/* ── Block Panel ─────────────────────────────────────────────── */
+.block-panel{display:flex;align-items:center;gap:6px;margin-left:8px;flex-wrap:wrap}
+.block-btn{
+  background:#ffa50015;border:1px solid #ffa50040;
+  color:#ffa500;padding:3px 9px;border-radius:5px;cursor:pointer;
+  font-family:inherit;font-size:11px;font-weight:600;
+  transition:all .15s;white-space:nowrap;
+}
+.block-btn:hover{background:#ffa50030;border-color:#ffa500}
+.block-btn.blocked{background:#22c55e18;border-color:#22c55e60;color:#22c55e}
+.block-btn.blocked:hover{background:#22c55e30;border-color:#22c55e}
+
+/* ── Autokill Toggle ─────────────────────────────────────────── */
+.autokill-wrap{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;flex-shrink:0}
+.autokill-wrap .ak-label{font-size:11px;font-weight:600;color:var(--dim);transition:color .2s}
+.autokill-wrap.on .ak-label{color:var(--crit)}
+.toggle-track{
+  width:34px;height:18px;border-radius:9px;background:var(--bg3);
+  border:1px solid var(--border);position:relative;transition:all .2s;flex-shrink:0;
+}
+.autokill-wrap.on .toggle-track{background:#ff444433;border-color:var(--crit);box-shadow:0 0 6px #ff444440}
+.toggle-thumb{
+  width:12px;height:12px;border-radius:50%;background:var(--dim2);
+  position:absolute;top:2px;left:2px;transition:all .2s;
+}
+.autokill-wrap.on .toggle-thumb{left:18px;background:var(--crit);box-shadow:0 0 4px var(--crit)}
+.ak-pulse{
+  display:none;width:7px;height:7px;border-radius:50%;background:var(--crit);
+  animation:pulse 1s infinite;flex-shrink:0;
+}
+.autokill-wrap.on .ak-pulse{display:block}
+/* ── Auto-Entfernen Toggle ───────────────────────────────────── */
+.autoneutral-wrap{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;flex-shrink:0}
+.autoneutral-wrap .an-label{font-size:11px;font-weight:600;color:var(--dim);transition:color .2s}
+.autoneutral-wrap.on .an-label{color:#ff8c00}
+.autoneutral-wrap.on .toggle-track{background:#ff8c0033;border-color:#ff8c00;box-shadow:0 0 6px #ff8c0040}
+.autoneutral-wrap.on .toggle-thumb{left:18px;background:#ff8c00;box-shadow:0 0 4px #ff8c00}
+.an-pulse{display:none;width:7px;height:7px;border-radius:50%;background:#ff8c00;animation:pulse 1s infinite;flex-shrink:0}
+.autoneutral-wrap.on .an-pulse{display:block}
+/* ── Netz-Isolierung Button ─────────────────────────────────── */
+#ni-btn{
+  background:none;border:1px solid var(--border);color:var(--dim);
+  padding:7px 13px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:11.5px;
+  font-weight:600;display:flex;align-items:center;gap:7px;white-space:nowrap;
+  transition:all .2s;flex-shrink:0;
+}
+#ni-btn:hover{background:var(--bg3);color:var(--text)}
+#ni-btn.on{
+  background:#3b82f618;border-color:#3b82f6;color:#60a5fa;
+  box-shadow:0 0 8px #3b82f630;
+}
+#ni-btn .ni-dot{
+  width:5px;height:5px;border-radius:50%;background:var(--dim2);
+  flex-shrink:0;transition:background .2s;
+}
+#ni-btn.on .ni-dot{background:#3b82f6;box-shadow:0 0 4px #3b82f6;animation:pulse 1s infinite}
+/* ── Threat Correlation ───────────────────────────────────── */
+.tcard-correlation{padding:4px 10px;font-size:10.5px;color:#facc15;background:#facc1510;border-top:1px solid #facc1520;margin-top:2px}
+.corr-sess{cursor:pointer;text-decoration:underline;color:#fbbf24;margin:0 2px}
+.corr-sess:hover{color:#fde68a}
+/* ── Implant-Banner in Session ──────────────────────── */
+.sess-impl-banner{
+  display:flex;align-items:center;gap:8px;
+  background:#cc00ff10;border-bottom:1px solid #cc00ff35;
+  padding:5px 14px;font-size:11.5px;color:#cc55ff;flex-shrink:0;
+}
+.sess-impl-banner.impl-cleared{opacity:.45;color:var(--dim);background:transparent;border-color:transparent}
+.impl-pulse{width:7px;height:7px;border-radius:50%;background:#cc55ff;box-shadow:0 0 5px #cc55ff;animation:pulse 1s infinite;flex-shrink:0}
+.sess-impl-banner.impl-cleared .impl-pulse{display:none}
+.impl-role{font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:.05em;
+           background:#cc00ff20;border:1px solid #cc00ff50;color:#cc55ff;flex-shrink:0}
+.impl-role.watchdog{background:#ff000018;border-color:#ff000050;color:#ff6666}
+.impl-role.worker{background:#ff880018;border-color:#ff880050;color:#ffaa44}
+.impl-kill-btn{
+  margin-left:auto;background:#cc00ff18;border:1px solid #cc00ff50;
+  color:#cc55ff;padding:3px 10px;border-radius:5px;cursor:pointer;
+  font-family:inherit;font-size:11px;font-weight:600;transition:all .15s;
+}
+.impl-kill-btn:hover{background:#cc00ff30;border-color:#cc55ff}
+.impl-kill-btn:disabled{opacity:.4;cursor:not-allowed}
+/* ── Rootkit-Banner in Session ───────────────────────── */
+.sess-rk-banner{
+  display:flex;align-items:center;gap:8px;
+  background:#ff8c0012;border-bottom:1px solid #ff8c0035;
+  padding:5px 14px;font-size:11.5px;color:#ff8c00;flex-shrink:0;
+}
+.sess-rk-banner.rk-cleared{opacity:.45;color:var(--dim);background:transparent;border-color:transparent}
+.rk-pulse{width:7px;height:7px;border-radius:50%;background:#ff8c00;box-shadow:0 0 5px #ff8c00;animation:pulse 1s infinite;flex-shrink:0}
+.sess-rk-banner.rk-cleared .rk-pulse{display:none}
+.rk-kill-btn{
+  margin-left:auto;background:#ff8c0018;border:1px solid #ff8c0050;
+  color:#ff8c00;padding:3px 10px;border-radius:5px;cursor:pointer;
+  font-family:inherit;font-size:11px;font-weight:600;transition:all .15s;
+}
+.rk-kill-btn:hover{background:#ff8c0030;border-color:#ff8c00}
+.rk-kill-btn:disabled{opacity:.4;cursor:not-allowed}
+.sess-logfile{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:4px 14px;font-size:11px;color:var(--sess);flex-shrink:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* ── Block-Banner in Session ─────────────────────────────────── */
+.sess-block-banner{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:#22c55e12;border-bottom:1px solid #22c55e40;
+  padding:6px 14px;font-size:11.5px;color:#86efac;flex-shrink:0;
+}
+.sbb-ico{font-size:13px;flex-shrink:0}
+.sbb-txt b{color:#4ade80}
+.sbb-hint{color:var(--dim);font-size:10.5px;margin-left:2px}
+.terminal{flex:1;overflow-y:auto;padding:6px 14px;font-size:12px;line-height:1.7;scrollbar-width:thin}
+.terminal::-webkit-scrollbar{width:5px}
+.terminal::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.tl{display:flex;gap:8px;padding:2px 4px;border-radius:3px;animation:fin .12s ease}
+.tl:hover{background:var(--bg2)}
+.tl-ts{color:var(--dim);font-size:10px;min-width:68px;flex-shrink:0}
+.tl-dir{min-width:20px;font-weight:700;flex-shrink:0}
+.tl-data{word-break:break-all;flex:1}
+.tl.cmd    .tl-dir{color:var(--crit)}      .tl.cmd    .tl-data{color:#ffb3b0}
+.tl.out    .tl-dir{color:var(--low)}       .tl.out    .tl-data{color:#a8f0b0}
+.tl.prompt .tl-dir{color:var(--sess)}      .tl.prompt .tl-data{color:#d8b4fe}
+.tl.marker .tl-dir{color:var(--high)}      .tl.marker .tl-data{color:var(--high)}
+.tl.sens   .tl-dir{color:var(--crit)}      .tl.sens   .tl-data{color:var(--crit);font-weight:600}
+.tl.http   .tl-dir{color:var(--info)}       .tl.http   .tl-data{color:#93c5fd}
+.tl.dnsq   .tl-dir{color:#58a6ff}           .tl.dnsq   .tl-data{color:#93c5fd}
+.tl.dnsr   .tl-dir{color:#d2a8ff}           .tl.dnsr   .tl-data{color:#d8b4fe}
+.tl.out,.tl.sens{margin-left:22px;padding-left:10px;border-left:2px solid #3fb95045}
+.tl.sens{border-left-color:#f8514966;background:#f8514908}
+
+/* Shell-Gruppen */
+.shell-group{
+  margin:12px 0 16px;border:1px solid #30363d;border-radius:8px;
+  background:#0d111788;overflow:hidden;box-shadow:0 3px 14px #0004;
+}
+.shell-group.active{border-color:#f8514966;box-shadow:0 0 16px #f8514915}
+.shell-group.ended{border-color:#30363d;box-shadow:none;background:#0d111755}
+.shell-group.ended .shell-start{
+  background:linear-gradient(90deg,#30363d88,#161b2266 70%,transparent);
+  border-left-color:#6e7681;border-bottom-color:#30363d;box-shadow:none;
+}
+.shell-group.ended .shell-group-body{filter:grayscale(1);opacity:.48}
+.shell-group.ended .shell-start-badge,
+.shell-group.ended .shell-start-pid{background:#30363d;color:#8b949e;border-color:#484f58}
+.shell-end-flag{
+  color:#c9d1d9;background:#30363d;border:1px solid #6e7681;
+  padding:3px 8px;border-radius:4px;font-size:10px;font-weight:800;
+  white-space:nowrap;letter-spacing:.35px;
+}
+.shell-end-flag.autokill{color:#ffb3b0;border-color:#f8514977;background:#f8514920}
+.shell-group-body{padding:5px 10px 10px}
+.shell-group-body:empty::after{
+  content:'Warte auf Befehle …';display:block;padding:10px 4px;
+  color:var(--dim);font-size:10px;font-style:italic;
+}
+.shell-start{
+  display:flex;align-items:center;gap:9px;
+  margin:0;padding:9px 11px;
+  background:linear-gradient(90deg,#f8514935,#bc8cff18 70%,transparent);
+  border-left:4px solid var(--crit);border-bottom:1px solid #f8514944;
+  box-shadow:0 0 14px #f8514918;animation:fin .2s ease;
+}
+.shell-start-badge{
+  color:#fff;background:var(--crit);font-weight:800;font-size:11px;
+  padding:3px 7px;border-radius:4px;white-space:nowrap;letter-spacing:.4px;
+}
+.shell-start-pid{
+  color:#fff;font-weight:700;font-size:11px;padding:2px 7px;
+  background:#bc8cff30;border:1px solid #bc8cff66;border-radius:10px;white-space:nowrap;
+}
+.shell-start-pid.pending{color:var(--dim);background:var(--bg2);border-color:var(--dim2)}
+.shell-start-remote{color:#ffb3b0;font-weight:700;white-space:nowrap}
+.shell-start-time{color:var(--dim);font-size:10px;margin-left:auto;white-space:nowrap}
+
+/* Befehlstrenner */
+.cmd-sep{
+  display:flex;align-items:center;gap:8px;
+  margin:12px 0 5px;padding:7px 9px;
+  background:linear-gradient(90deg,#23863622,transparent);
+  border-left:3px solid var(--low);border-radius:4px;
+  animation:fin .15s ease;
+}
+.cmd-sep-line{display:none}
+.cmd-sep-text{color:#d2f7d8;font-weight:700;font-size:12px;white-space:normal;padding:0;word-break:break-word}
+.cmd-sep-pid{
+  color:#fff;font-size:10px;font-weight:700;white-space:nowrap;
+  padding:2px 6px;background:#f8514930;border:1px solid #f8514970;border-radius:10px;
+  font-family:var(--font);letter-spacing:.2px;
+}
+.cmd-sep-pid.pending{color:var(--dim);background:var(--bg2);border-color:var(--dim2)}
+.cmd-sep-cwd{
+  color:#93c5fd;font-size:10px;white-space:nowrap;
+  padding:2px 6px;background:#1f6feb22;border:1px solid #58a6ff55;border-radius:4px;
+}
+.cmd-sep-ts{color:var(--dim);font-size:10px;white-space:nowrap;margin-left:auto}
+.tsep{border:none;border-top:1px dashed var(--border);margin:5px 0}
+.sess-foot{
+  background:var(--bg2);border-top:1px solid var(--border);
+  padding:4px 14px;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--dim);
+  flex-shrink:0;
+}
+.sess-foot label{cursor:pointer;display:flex;align-items:center;gap:5px}
+/* Beendet-Overlay */
+.sess-ended-banner{
+  background:#13101a;border:1px solid var(--dim2);border-radius:5px;
+  color:var(--dim);font-size:11px;padding:4px 12px;text-align:center;margin:6px 14px;
+  flex-shrink:0;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ Sidebar ═══════════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sb-brand">
+    <span class="sb-logo">⚡</span>
+    <div class="sb-brand-txt">
+      <div class="sb-title">Security-Monitoring</div>
+      <div class="sb-sub" id="sb-container">SECURITY MONITOR</div>
+    </div>
+  </div>
+  <div class="sb-status">
+    <span class="dot" id="dot"></span>
+    <span class="hdr-lbl" id="lbl">Verbinde...</span>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-sec">Lage</div>
+    <div class="tab t-overview on" id="tab-overview" onclick="switchTab('overview')" title="Gesamtlage auf einen Blick">
+      <span class="tab-ico">◉</span>
+      <span class="tab-txt">Übersicht</span>
+    </div>
+    <div class="sb-sec">Analyse</div>
+    <div class="tab t-monitor" id="tab-monitor" onclick="switchTab('monitor')" title="Alle Monitor-Ereignisse mit Filtern">
+      <span class="tab-ico">📡</span>
+      <span class="tab-txt">Monitor-Modus</span>
+      <span class="tab-badge" id="badge-monitor"></span>
+    </div>
+    <div class="tab t-threat" id="tab-threats" onclick="switchTab('threats')" title="Aktive Bedrohungen mit Gegenmaßnahmen">
+      <span class="tab-ico">🦠</span>
+      <span class="tab-txt">Bedrohungen</span>
+      <span class="tab-ind"></span>
+      <span class="tab-badge" id="badge-threats"></span>
+    </div>
+    <div class="tab t-sessions" id="tab-sessions" onclick="switchTab('sessions')" title="Live-Mitschnitt aktiver Reverse Shells">
+      <span class="tab-ico">💻</span>
+      <span class="tab-txt">Sessions</span>
+      <span class="tab-ind"></span>
+      <span class="tab-badge" id="badge-sessions"></span>
+    </div>
+    <div class="sb-sec">Reaktion</div>
+    <div class="tab t-protection" id="tab-protection" onclick="switchTab('protection')" title="Automatische Gegenmaßnahmen konfigurieren">
+      <span class="tab-ico">🛡</span>
+      <span class="tab-txt">Schutz</span>
+    </div>
+  </nav>
+  <div class="sb-foot">
+    <span>Ctrl+F</span><span style="color:var(--border)">│</span><span>Suchen</span>
+  </div>
+</aside>
+
+<!-- ═══ Main ══════════════════════════════════════════════════ -->
+<div class="main">
+
+<!-- Search -->
+<div class="search-bar" id="search-bar" style="display:none">
+  <input id="q" type="text" placeholder="Suchen… (Esc schließt)" oninput="doSearch()">
+  <span class="search-cnt" id="qcnt"></span>
+  <button class="hdr-btn" onclick="closeSearch()">✕</button>
+</div>
+
+<!-- Panels -->
+<div class="panels" id="panels">
+
+  <!-- ─── Übersicht ──────────────────────────────────────────── -->
+  <div class="panel on" id="panel-overview">
+    <div class="panel-head">
+      <span class="panel-head-ico">◉</span>
+      <div class="panel-head-txt">
+        <div class="panel-head-title">Übersicht</div>
+        <div class="panel-head-sub">Gesamtlage – Ereigniszahlen, Schutzstatus und letzte Meldungen</div>
+      </div>
+    </div>
+    <div class="ov-body">
+
+      <div class="ov-sec">Ereignisse nach Schweregrad</div>
+      <div class="ov-tiles">
+        <div class="ov-tile t-crit" onclick="switchTab('monitor')" title="Kritische Ereignisse – im Monitor-Modus ansehen">
+          <span class="ov-tile-lbl">CRITICAL</span><span class="ov-tile-val" id="ov-pc">0</span>
+        </div>
+        <div class="ov-tile t-high" onclick="switchTab('monitor')" title="Hohe Schwere – im Monitor-Modus ansehen">
+          <span class="ov-tile-lbl">HIGH</span><span class="ov-tile-val" id="ov-ph">0</span>
+        </div>
+        <div class="ov-tile t-med" onclick="switchTab('monitor')" title="Mittlere Schwere – im Monitor-Modus ansehen">
+          <span class="ov-tile-lbl">MEDIUM</span><span class="ov-tile-val" id="ov-pm">0</span>
+        </div>
+        <div class="ov-tile t-low" onclick="switchTab('monitor')" title="Niedrige Schwere – im Monitor-Modus ansehen">
+          <span class="ov-tile-lbl">LOW</span><span class="ov-tile-val" id="ov-pl">0</span>
+        </div>
+        <div class="ov-tile t-info" onclick="switchTab('monitor')" title="Informationen – im Monitor-Modus ansehen">
+          <span class="ov-tile-lbl">INFO</span><span class="ov-tile-val" id="ov-pi">0</span>
+        </div>
+        <div class="ov-tile t-sess" onclick="switchTab('sessions')" title="Session-Ereignisse – Sessions ansehen">
+          <span class="ov-tile-lbl">SESSIONS</span><span class="ov-tile-val" id="ov-ps">0</span>
+        </div>
+      </div>
+
+      <div class="ov-sec">
+        Schutzstatus
+        <span class="ov-sec-cnt">Klicken öffnet „Schutz“</span>
+      </div>
+      <div class="ov-prot">
+        <div class="ov-prot-card" onclick="switchTab('protection')">
+          <span class="ov-prot-ico">☠</span>
+          <div class="ov-prot-txt">
+            <div class="ov-prot-name">Auto-Kill Reverse Shells</div>
+            <div class="ov-prot-state st-off" id="ov-ak-state">INAKTIV</div>
+          </div>
+        </div>
+        <div class="ov-prot-card" onclick="switchTab('protection')">
+          <span class="ov-prot-ico">🤖</span>
+          <div class="ov-prot-txt">
+            <div class="ov-prot-name">Auto-Entfernen Rootkits</div>
+            <div class="ov-prot-state st-off" id="ov-an-state">INAKTIV</div>
+          </div>
+        </div>
+        <div class="ov-prot-card" onclick="switchTab('protection')">
+          <span class="ov-prot-ico">🌐</span>
+          <div class="ov-prot-txt">
+            <div class="ov-prot-name">Netzwerk-Isolierung</div>
+            <div class="ov-prot-state st-off" id="ov-ni-state">NICHT ISOLIERT</div>
+            <div class="ov-prot-net" id="ov-ni-net">ausgehend frei</div>
+          </div>
+        </div>
+        <div class="ov-prot-card" onclick="switchTab('sessions')">
+          <span class="ov-prot-ico">💻</span>
+          <div class="ov-prot-txt">
+            <div class="ov-prot-name">Aktive Sessions</div>
+            <div class="ov-prot-state st-off" id="ov-sess-state">KEINE</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ov-sec">
+        Gesperrte Ziele
+        <span class="ov-sec-cnt" id="ov-blk-cnt">0 Sperren</span>
+      </div>
+      <div class="ov-blocks" id="ov-blocks"></div>
+      <div class="ov-empty" id="ov-blocks-empty">Keine IP- oder Port-Sperren aktiv</div>
+
+      <div class="ov-sec">
+        Letzte Ereignisse
+        <span class="ov-sec-cnt">max. 12 – Klick öffnet Monitor-Modus</span>
+      </div>
+      <div class="ov-recent" id="ov-recent"></div>
+      <div class="ov-empty" id="ov-recent-empty">Noch keine Ereignisse empfangen</div>
+
+    </div>
+  </div>
+
+  <!-- ─── Monitor-Modus ──────────────────────────────────────── -->
+  <div class="panel" id="panel-monitor">
+    <div class="panel-head">
+      <span class="panel-head-ico">📡</span>
+      <div class="panel-head-txt">
+        <div class="panel-head-title">Monitor-Modus</div>
+        <div class="panel-head-sub">Vollständiger Ereignisstrom – hier werden alle Filter gesetzt</div>
+      </div>
+      <button class="hdr-btn" onclick="clearFeed()" title="Angezeigte Ereignisse aus der Ansicht entfernen">✕ Ansicht leeren</button>
+    </div>
+    <div class="filterbar">
+      <span class="filterbar-lbl">Filter</span>
+      <div class="pills">
+        <span class="pill p-crit on" data-s="CRITICAL" onclick="flt(this)" title="CRITICAL ein-/ausblenden">CRIT <b id="pc">0</b></span>
+        <span class="pill p-high on" data-s="HIGH"     onclick="flt(this)" title="HIGH ein-/ausblenden">HIGH <b id="ph">0</b></span>
+        <span class="pill p-med  on" data-s="MEDIUM"   onclick="flt(this)" title="MEDIUM ein-/ausblenden">MED <b id="pm">0</b></span>
+        <span class="pill p-low  on" data-s="LOW"      onclick="flt(this)" title="LOW ein-/ausblenden">LOW <b id="pl">0</b></span>
+        <span class="pill p-info on" data-s="INFO"     onclick="flt(this)" title="INFO ein-/ausblenden">INFO <b id="pi">0</b></span>
+        <span class="pill p-sess on" data-s="SESSION"  onclick="flt(this)" title="SESSION ein-/ausblenden">SESS <b id="ps">0</b></span>
+        <span class="pill p-http"    data-s="HTTP"     onclick="flt(this)" title="HTTP-Pentest-Traffic – standardmäßig ausgeblendet">HTTP <b id="phttp">0</b></span>
+      </div>
+      <span class="filterbar-sep"></span>
+      <span class="filterbar-hint">Umrandete Pille = sichtbar</span>
+    </div>
+    <div id="feed">
+      <div class="empty-feed" id="empty">
+        <div class="ico">🛡</div>
+        <p>Warte auf Monitor-Events…</p>
+      </div>
+    </div>
+    <div class="feed-foot">
+      <label><input type="checkbox" id="asc" checked> Auto-Scroll</label>
+      <span style="margin-left:auto;color:var(--dim)" id="fcnt">0 Events</span>
+      <span style="color:var(--dim2);font-size:10px">Ctrl+F Suchen</span>
+    </div>
+  </div>
+
+  <!-- ─── Bedrohungen ────────────────────────────────────────── -->
+  <div class="panel" id="panel-threats">
+    <div class="threat-hdr">
+      <span class="threat-pulse"></span>
+      <div class="panel-head-txt">
+        <div class="panel-head-title" style="color:var(--crit)">Aktive Bedrohungen</div>
+        <div class="panel-head-sub">Je Bedrohung eine Karte mit Verlauf und passender Gegenmaßnahme</div>
+      </div>
+      <button class="hdr-btn" style="font-size:11px" onclick="clearThreats()" title="Alle Bedrohungskarten aus der Ansicht entfernen">✕ Ansicht leeren</button>
+    </div>
+    <div id="threat-feed">
+      <div class="ov-empty" id="threat-empty">Keine aktiven Bedrohungen erkannt</div>
+    </div>
+    <div class="feed-foot">
+      <span style="color:var(--dim)" id="tcnt">0 Bedrohungen</span>
+    </div>
+  </div>
+
+  <!-- ─── Sessions ───────────────────────────────────────────── -->
+  <div class="panel" id="panel-sessions">
+    <div class="sessions-wrap">
+      <!-- Sidebar: session list -->
+      <div class="sess-sidebar">
+        <div class="sess-sidebar-hdr">
+          <span class="threat-pulse" id="sess-hdr-pulse" style="display:none"></span>
+          💻 SESSIONS
+          <span class="sess-sidebar-hdr-cnt" id="sess-sidebar-cnt">0 aktiv</span>
+        </div>
+        <div class="sess-sidebar-list" id="sess-sidebar-list">
+          <div class="sess-sidebar-empty" id="sess-sidebar-empty">
+            <div class="ico">🖥</div>
+            <p>Keine Sessions</p>
+          </div>
+        </div>
+      </div>
+      <!-- Detail pane -->
+      <div class="sess-detail-wrap" id="sess-detail-wrap">
+        <div class="sess-detail-empty" id="sess-detail-empty">
+          <div class="ico">🖥</div>
+          <p>← Session in der Seitenleiste auswählen</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Schutz & Automatisierung ───────────────────────────── -->
+  <div class="panel" id="panel-protection">
+    <div class="panel-head">
+      <span class="panel-head-ico">🛡</span>
+      <div class="panel-head-txt">
+        <div class="panel-head-title">Schutz &amp; Automatisierung</div>
+        <div class="panel-head-sub">Automatische Gegenmaßnahmen – jeder Schalter wirkt sofort auf das laufende System</div>
+      </div>
+    </div>
+    <div class="prot-body">
+      <div class="prot-cards">
+
+        <!-- Auto-Kill -->
+        <div class="prot-card" id="prot-card-ak">
+          <div class="prot-hdr">
+            <span class="prot-ico">☠</span>
+            <div class="prot-info">
+              <div class="prot-title">Auto-Kill – Reverse Shells automatisch beenden</div>
+              <div class="prot-sub">Beendet jeden neu erkannten Reverse-Shell-Prozess sofort, ohne Rückfrage.</div>
+            </div>
+            <span class="prot-state-badge st-off" id="prot-ak-badge">INAKTIV</span>
+            <div class="autokill-wrap" id="akwrap" onclick="toggleAutokill()" title="Auto-Kill ein-/ausschalten">
+              <span class="ak-pulse"></span>
+              <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              <span class="ak-label">AUTO-KILL</span>
+            </div>
+          </div>
+          <div class="prot-body-in">
+            <div class="prot-desc">
+              Erkennt ARTEX eine Reverse Shell, wird die zugehörige PID unmittelbar beendet.
+              Die Session erscheint weiterhin unter „Sessions“ und wird dort als
+              <b style="color:var(--crit)">AUTO-KILL</b> gekennzeichnet, inklusive des bis dahin
+              mitgeschnittenen Verlaufs.
+            </div>
+            <div class="prot-row prot-eff">
+              <span class="prot-row-k">Wirkung</span>
+              <span><code>SIGKILL</code> an die Shell-PID – die Verbindung bricht sofort ab. Der Mitschnitt bleibt erhalten.</span>
+            </div>
+            <div class="prot-row prot-warn">
+              <span class="prot-row-k">Achtung</span>
+              <span>Greift ohne Bestätigung bei <b>jeder</b> künftigen Erkennung. Für forensische Beobachtung einer laufenden Shell muss der Schalter aus bleiben.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Auto-Entfernen -->
+        <div class="prot-card" id="prot-card-an">
+          <div class="prot-hdr">
+            <span class="prot-ico">🤖</span>
+            <div class="prot-info">
+              <div class="prot-title">Auto-Entfernen – Rootkits automatisch neutralisieren</div>
+              <div class="prot-sub">Entfernt erkannte Preload-Rootkits sofort, ohne Rückfrage.</div>
+            </div>
+            <span class="prot-state-badge st-off" id="prot-an-badge">INAKTIV</span>
+            <div class="autoneutral-wrap" id="anwrap" onclick="toggleAutoNeutralize()" title="Auto-Entfernen ein-/ausschalten">
+              <span class="an-pulse"></span>
+              <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              <span class="an-label">AUTO-ENTFERNEN</span>
+            </div>
+          </div>
+          <div class="prot-body-in">
+            <div class="prot-desc">
+              Bei einem Rootkit-Treffer wird <code>/etc/ld.so.preload</code> geleert und die
+              zugehörige Bibliothek entfernt. Bei einem Implant-Treffer (Fake-kworker,
+              DNS-Tunnel-Owner, laufende gelöschte Binaries) wird zusätzlich der
+              zugehörige Prozess per <code>SIGKILL</code> beendet. Die Bedrohungskarte
+              wechselt anschließend auf <b style="color:var(--low)">✓ Entfernt</b>.
+            </div>
+            <div class="prot-row prot-eff">
+              <span class="prot-row-k">Wirkung</span>
+              <span><code>/etc/ld.so.preload</code> leeren + <code>.so</code>/<code>.ko</code>-Dateien in <code>/tmp</code> und <code>/dev/shm</code> löschen + erkannte Implant-PIDs beenden.</span>
+            </div>
+            <div class="prot-row prot-warn">
+              <span class="prot-row-k">Achtung</span>
+              <span>Dateien werden gelöscht, nicht in Quarantäne verschoben. Für eine Beweissicherung vorher manuell sichern.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Netzwerk-Isolierung -->
+        <div class="prot-card" id="prot-card-ni">
+          <div class="prot-hdr">
+            <span class="prot-ico">🌐</span>
+            <div class="prot-info">
+              <div class="prot-title">Netzwerk-Isolierung – ausgehenden Verkehr sperren</div>
+              <div class="prot-sub">Manueller Schalter: kappt sämtliche ausgehenden Verbindungen des Containers.</div>
+            </div>
+            <span class="prot-state-badge st-off" id="prot-ni-badge">NICHT ISOLIERT</span>
+            <button id="ni-btn" onclick="toggleNetworkIsolation()" title="Netzwerk isolieren bzw. wieder freigeben">
+              <span class="ni-dot"></span>
+              <span id="ni-label">🔒 Isolieren</span>
+            </button>
+          </div>
+          <div class="prot-body-in">
+            <div class="prot-desc">
+              Setzt eine <code>DROP</code>-Regel in die <code>OUTPUT</code>-Kette. Laufende Reverse Shells
+              und Exfiltrations-Kanäle können danach keine Daten mehr senden. Der Schalter wirkt
+              in beide Richtungen – ein zweiter Klick gibt das Netzwerk wieder frei.
+            </div>
+            <div class="prot-row prot-eff">
+              <span class="prot-row-k">Wirkung</span>
+              <span><code>iptables -P OUTPUT DROP</code> mit Ausnahme für das Docker-Netz und
+              Loopback – die Freigabe setzt die Regeln per <code>-F OUTPUT</code> zurück.</span>
+            </div>
+            <div class="prot-row prot-eff">
+              <span class="prot-row-k">Bereich</span>
+              <span id="prot-ni-net">Beim Isolieren gesperrt: <b>alle ausgehenden Ziele ausser 172.16.0.0/12</b> und Loopback.</span>
+            </div>
+            <div class="prot-row prot-warn">
+              <span class="prot-row-k">Achtung</span>
+              <span>Betrifft den <b>gesamten</b> Container, auch legitimen Verkehr (Datenbank, Proxy, Updates). Die Web-Anwendung ist währenddessen eingeschränkt.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="prot-row prot-eff" style="max-width:780px;margin-top:2px">
+          <span class="prot-row-k" style="color:var(--info)">Hinweis</span>
+          <span>Gezielte Gegenmaßnahmen für einen einzelnen Fund – PID beenden, Datei entfernen,
+          SUID-Bit zurücksetzen, IP oder Port sperren – stehen direkt an der jeweiligen
+          Bedrohungskarte und am Session-Kopf. Hier stehen nur die dauerhaft wirkenden Automatiken.</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /panels -->
+</div><!-- /main -->
+
+<script>
+"use strict";
+// ── State ──────────────────────────────────────────────────────
+let es = null, feedN = 0, activeTab = 'overview';
+let filters = new Set(['CRITICAL','HIGH','MEDIUM','LOW','INFO','SESSION']);
+let sessions = {}, sessionTabs = new Set();
+const THREAT_MSGS = /ROOTKIT|BIND SHELL|NEUER LISTENER|ANTI-MONITOR|CONTAINER ESCAPE|BACKDOOR|EXFIL|IMPLANT|FILE INTEGRITY|PERSISTENCE|WEBSHELL|CREDENTIAL ACCESS|PRIVESC.*SUID/i;
+const threatCards = new Map();
+let threatN = 0;
+const MAX_FEED = 500, MAX_TERM = 1200;
+const shownIds  = new Set();
+const shownMsgs = new Map();
+
+// ── SSE ────────────────────────────────────────────────────────
+function connect() {
+  if (es) es.close();
+  es = new EventSource('/events');
+  es.onopen = () => {
+    setStatus('on', 'Monitor verbunden');
+    syncSessions();
+    syncBlocks();
+    syncNetworkInfo();
+  };
+  es.onmessage = e => { try { handle(JSON.parse(e.data)); } catch(_){} };
+  es.onerror = () => {
+    setStatus('err', 'Verbindung getrennt – reconnect…');
+    es.close(); setTimeout(connect, 3000);
+  };
+}
+function setStatus(cls, txt) {
+  document.getElementById('dot').className = 'dot ' + cls;
+  document.getElementById('lbl').textContent = txt;
+}
+
+// ── Event handling ─────────────────────────────────────────────
+function handle(ev) {
+  const t = ev.type;
+
+  if (t === 'autokill_state') { setAutokillUI(ev.enabled); return; }
+  if (t === 'auto_neutralize_state') { setAutoNeutralizeUI(ev.enabled); return; }
+  if (t === 'rootkit_correlation') { handleRootkitCorrelation(ev); return; }
+  if (t === 'implant_correlation') { handleImplantCorrelation(ev); return; }
+  if (t === 'implant_cleared')     { handleImplantCleared(ev); return; }
+  if (t === 'auto_neutralize_applied') { handleAutoNeutralizeApplied(ev); return; }
+  if (t === 'countermeasure') { handleCountermeasureApplied(ev); return; }
+  if (t === 'block_state') { applyBlockState(ev.blocks); return; }
+
+  if (t === 'session_autokilled') {
+    ensureSess(ev.remote, ev.ts, '', null);
+    const ky = k(ev.remote);
+    const term = document.getElementById('term-' + ky);
+    if (term) {
+      const body = _ensurePidShell(ev.remote, ev.pid, ev.ts) || term;
+      const row = document.createElement('div');
+      row.className = 'tl sens';
+      row.innerHTML =
+        '<span class="tl-ts">' + esc(ev.ts||'') + '</span>' +
+        '<span class="tl-dir">☠</span>' +
+        '<span class="tl-data" style="color:var(--crit);font-weight:700">' +
+        'AUTO-KILL – PID ' + esc(String(ev.pid)) + ' sofort beendet</span>';
+      body.appendChild(row);
+      term.scrollTop = term.scrollHeight;
+    }
+    markShellsEnded(ev.remote, ev.pids || [ev.pid], ev.ts, 'autokill');
+    const btn = document.getElementById('killbtn-' + ky);
+    if (btn) { btn.classList.add('killed'); btn.textContent = '✓ Auto-Killed'; btn.disabled = true; }
+    addAlert({ type:'alert', severity:'CRITICAL', ts: ev.ts,
+      message: '☠ AUTO-KILL – Reverse Shell PID ' + ev.pid + ' @ ' + ev.remote + ' beendet',
+      detail: 'Autokill war aktiv' }, true);
+    return;
+  }
+
+  if (t === 'init') {
+    // Container-Name in Sidebar + Browser-Tab anzeigen – entscheidend wenn
+    // mehrere Container-Instanzen (--all) parallel in eigenen Tabs laufen.
+    if (ev.container) {
+      const el = document.getElementById('sb-container');
+      if (el) el.textContent = ev.container;
+      document.title = 'Security-Monitoring – ' + ev.container;
+    }
+    // First pass: alert-type events only (creates threat cards before sessions exist)
+    (ev.history||[]).forEach(h => { if ((h.type||'alert') === 'alert') addAlert(h, false); });
+    updStats(ev.stats||{});
+    if (ev.autokill !== undefined) setAutokillUI(ev.autokill);
+    if (ev.auto_neutralize !== undefined) setAutoNeutralizeUI(ev.auto_neutralize);
+    let activeRemote = null;
+    Object.values(ev.sessions||{}).forEach(s => {
+      ensureSess(s.remote, s.started, s.logfile, s.ended);
+      if (!s.ended) activeRemote = s.remote;
+      if (s.pid) {
+        if (sessions[s.remote]) sessions[s.remote].pid = s.pid;
+        const el = document.getElementById('killpid-' + k(s.remote));
+        if (el) el.textContent = s.pid;
+      }
+      (s.cmds||[]).forEach(c => termLine(s.remote, c.direction, c.data, c.ts, false, c.pid));
+      if (s.pid) _ensurePidShell(s.remote, s.pid, s.started);
+      if (s.ended) {
+        const ePids = (s.ended_pids || [s.ended_pid]).filter(Boolean);
+        ePids.forEach(epid => _ensurePidShell(s.remote, String(epid), s.started));
+        markShellsEnded(s.remote, ePids.length ? ePids : [s.ended_pid || s.pid],
+                        s.ended, s.ended_reason || 'closed');
+      }
+    });
+    // Second pass: rootkit/implant correlation after sessions exist
+    (ev.history||[]).forEach(h => {
+      if (h.type === 'rootkit_correlation')  handleRootkitCorrelation(h);
+      else if (h.type === 'rootkit_cleared') handleRootkitCleared(h);
+      else if (h.type === 'implant_correlation') handleImplantCorrelation(h);
+      else if (h.type === 'implant_cleared')     handleImplantCleared(h);
+      else if (h.type === 'countermeasure')      handleCountermeasureApplied(h);
+    });
+    // Re-run rootkit state check now that sessions exist (handles 60s dedup gap)
+    checkRootkitState();
+    if (activeRemote) switchTab('sess-' + k(activeRemote));
+    if (ev.monitor?.running) setStatus('on', `Aktiv${ev.monitor.privileged?' (Raw Socket)':''} seit ${ev.monitor.started}`);
+    return;
+  }
+  if (t === 'alert')          { addAlert(ev, true); return; }
+  if (t === 'rootkit_cleared'){ handleRootkitCleared(ev); return; }
+  if (t === 'detail_update')  { patchDet(ev.id, ev.detail); return; }
+  if (t === 'stats')         { updStats(ev.stats); return; }
+  if (t === 'session_open') {
+    ensureSess(ev.remote, ev.started, '', null);
+    if (ev.pid) {
+      if (sessions[ev.remote]) sessions[ev.remote].pid = ev.pid;
+      const el = document.getElementById('killpid-' + k(ev.remote));
+      if (el) el.textContent = ev.pid;
+      _ensurePidShell(ev.remote, ev.pid, ev.started);
+    }
+    _bumpSessActivity(k(ev.remote));
+    switchTab('sess-' + k(ev.remote));
+    addAlert({ type:'alert', severity:'SESSION', ts: ev.started,
+      message: '🚨 REVERSE SHELL AKTIV → ' + ev.remote,
+      detail: '⚠ Session-Tab geöffnet  |  Verbindung sofort beenden!' }, true);
+    return;
+  }
+  if (t === 'session_pid') {
+    if (sessions[ev.remote]) sessions[ev.remote].pid = ev.pid;
+    const el = document.getElementById('killpid-' + k(ev.remote));
+    if (el) el.textContent = ev.pid;
+    _ensurePidShell(ev.remote, ev.pid, ev.ts);
+    const ky = k(ev.remote);
+    document.querySelectorAll('#term-' + ky + ' .cmd-sep-pid.pending').forEach(span => {
+      span.textContent = 'PID ' + ev.pid;
+      span.classList.remove('pending');
+    });
+    document.querySelectorAll('#term-' + ky + ' .shell-start-pid.pending').forEach(span => {
+      span.textContent = 'PID ' + ev.pid;
+      span.classList.remove('pending');
+    });
+    return;
+  }
+  if (t === 'session_cmd') {
+    ensureSess(ev.remote, '', '', null);
+    termLine(ev.remote, ev.direction, ev.data, ev.ts, true, ev.pid);
+    _bumpSessActivity(k(ev.remote));
+    return;
+  }
+  if (t === 'session_logfile') {
+    if (sessions[ev.remote]) sessions[ev.remote].logfile = ev.logfile;
+    const lf = document.getElementById('lf-' + k(ev.remote));
+    if (lf) { lf.textContent = '📄 tail -f ' + ev.logfile; lf.style.display='block'; }
+    return;
+  }
+  if (t === 'session_closed') {
+    const currentPid = sessions[ev.remote]?.pid;
+    if (sessions[ev.remote]) sessions[ev.remote].ended = ev.ended;
+    markShellsEnded(ev.remote, ev.pids || [ev.pid || currentPid],
+                    ev.ended, ev.reason || 'closed');
+    markEnded(ev.remote, ev.ended);
+    if (ev.reason !== 'autokill') {
+      const killType = ev.reason === 'killed' ? '☠ Kill' : '⚠ Session beendet';
+      const sev      = ev.reason === 'killed' ? 'CRITICAL' : 'SESSION';
+      const detail   = ev.reason === 'killed' ? 'Manuell beendet' : '';
+      addAlert({ type:'alert', severity: sev,
+        ts: ev.ended || new Date().toTimeString().slice(0,8),
+        message: killType + ' – Session beendet → ' + ev.remote,
+        detail: detail }, true);
+    }
+    return;
+  }
+  if (t === 'monitor_started') {
+    setStatus('on', `Aktiv${ev.privileged?' (Raw Socket)':''} seit ${ev.ts}`);
+    addAlert({ type:'alert', severity:'INFO', ts:ev.ts,
+      message: '✓ Monitor gestartet' + (ev.privileged?' – Raw Socket Sniffer aktiv':'') }, true);
+    return;
+  }
+  if (t === 'monitor_stopped') {
+    setStatus('err', 'Monitor gestoppt – ' + ev.ts);
+    addAlert({ type:'alert', severity:'INFO', ts:ev.ts, message:'Monitor beendet' }, true);
+    return;
+  }
+  if (t === 'monitor_reconnect') {
+    setStatus('err', `Reconnect in ${ev.backoff}s…`);
+    return;
+  }
+  if (t === 'error') {
+    addAlert({ type:'alert', severity:'HIGH', ts: new Date().toTimeString().slice(0,8),
+      message: '⚠ Dashboard-Fehler: ' + ev.message }, true);
+  }
+}
+
+// ── Sync ───────────────────────────────────────────────────────
+async function syncBlocks() {
+  try {
+    const r = await fetch('/api/blocks', {cache: 'no-store'});
+    if (r.ok) applyBlockState(await r.json());
+  } catch(_) {}
+}
+
+async function syncNetworkInfo() {
+  try {
+    const r = await fetch('/api/network_info', {cache: 'no-store'});
+    if (r.ok) _setNiUI(await r.json());
+  } catch(_) {}
+}
+
+async function syncSessions() {
+  try {
+    const resp = await fetch('/api/sessions', {cache: 'no-store'});
+    if (!resp.ok) return;
+    const snapshot = await resp.json();
+    Object.values(snapshot || {}).forEach(s => {
+      const wasKnown = sessionTabs.has(s.remote);
+      const wasEnded = sessions[s.remote]?.ended;
+      ensureSess(s.remote, s.started, s.logfile, s.ended);
+      if (s.pid && sessions[s.remote]) {
+        sessions[s.remote].pid = s.pid;
+        sessions[s.remote].pids = s.pids || [];
+        const pidEl = document.getElementById('killpid-' + k(s.remote));
+        if (pidEl) pidEl.textContent = s.pid;
+        _ensurePidShell(s.remote, s.pid, s.started);
+      }
+      if (!s.ended && (!wasKnown || wasEnded)) {
+        switchTab('sess-' + k(s.remote));
+      }
+    });
+  } catch (_) {}
+}
+
+// ── Alert Feed ─────────────────────────────────────────────────
+function addAlert(ev, anim) {
+  const sev = ev.severity || 'INFO';
+  if (ev.id) {
+    if (shownIds.has(ev.id)) return;
+    shownIds.add(ev.id);
+    if (shownIds.size > 2000) {
+      const first = shownIds.values().next().value;
+      shownIds.delete(first);
+    }
+  } else {
+    const msgKey = sev + '|' + (ev.ts||'') + '|' + (ev.message||'');
+    if (shownMsgs.has(msgKey)) return;
+    shownMsgs.set(msgKey, 1);
+    if (shownMsgs.size > 500) {
+      const first = shownMsgs.keys().next().value;
+      shownMsgs.delete(first);
+    }
+  }
+  const feed = document.getElementById('feed');
+  const empty = document.getElementById('empty');
+  if (empty) empty.remove();
+
+  const row = document.createElement('div');
+  row.className = 'arow ' + sev;
+  if (sev === 'SESSION' && (ev.message||'').includes('REVERSE SHELL')) {
+    row.classList.add('shell-alert');
+  }
+  row.dataset.sev = sev;
+  row.dataset.id  = ev.id || '';
+  if (!anim) row.style.animation = 'none';
+  const _qv = document.getElementById('q').value.trim().toLowerCase();
+  const _filterHide = !filters.has(sev);
+  if (_filterHide) row.classList.add('hidden');
+
+  const msg = ev.message || '';
+  const cmBtns = buildCountermeasureBtns(msg, ev.detail || '');
+  row.innerHTML =
+    '<div class="arow-meta">' +
+    '<span class="arow-ts">'  + esc(ev.ts||'') + '</span>' +
+    '<span class="arow-sev s-' + sev + '">' + sev + '</span>' +
+    '<span class="arow-msg">' + esc(msg) + '</span>' +
+    '</div>' +
+    (ev.detail ? '<div class="arow-det">' + esc(ev.detail) + '</div>' : '') +
+    (cmBtns ? '<div class="arow-cm">' + cmBtns + '</div>' : '');
+
+  feed.appendChild(row);
+  if (THREAT_MSGS.test(msg)) addThreat(ev);
+  _wireInlineCm(row);
+  feedN++;
+  if (sev !== 'HTTP') _pushOverviewRecent(ev);
+  while (feed.children.length > MAX_FEED) feed.removeChild(feed.firstChild);
+  document.getElementById('fcnt').textContent = feedN + ' Events';
+  if (activeTab !== 'monitor' && !_filterHide) bumpBadge('monitor');
+  if (!_filterHide && document.getElementById('asc').checked) feed.scrollTop = feed.scrollHeight;
+  if (_qv) applySearch(_qv);
+}
+
+// ── Threat Cards ───────────────────────────────────────────────
+function threatKey(msg, detail) {
+  const d = String(detail || '');
+  const m = d.match(/([^\/\s]+\.(?:so|ko)[^\s]*)/);
+  if (m) return m[1].replace(/^\./, '').split('.')[0] || m[1];
+  if (/BIND SHELL|NEUER LISTENER/.test(msg)) {
+    const p = msg.match(/:(\d+)/); return p ? 'bindshell_' + p[1] : 'bindshell';
+  }
+  if (/ANTI-MONITOR/.test(msg)) return 'anti_monitor';
+  if (/CONTAINER ESCAPE/.test(msg)) return 'container_escape';
+  if (/EXFIL/.test(msg)) return 'exfil';
+  if (/IMPLANT.*WATCHDOG/.test(msg)) { const p = d.match(/PID=(\d+)/); return 'implant_wd_' + (p ? p[1] : '0'); }
+  if (/IMPLANT.*WORKER/.test(msg))   { const p = d.match(/PID=(\d+)/); return 'implant_wk_' + (p ? p[1] : '0'); }
+  if (/IMPLANT.*DNS/.test(msg))      { const p = d.match(/PID=(\d+)/); return 'implant_dns_' + (p ? p[1] : '0'); }
+  if (/IMPLANT/.test(msg))           { const p = d.match(/PID=(\d+)/); return 'implant_' + (p ? p[1] : '0'); }
+  if (/FILE INTEGRITY/.test(msg))  { const p = d.match(/\|?\s*(\S+)$/); return 'fi_' + (p ? p[1].replace(/\W/g,'_') : '0'); }
+  if (/PERSISTENCE/.test(msg))     { const p = d.match(/Datei:\s*(\S+)/); return 'persist_' + (p ? p[1].replace(/\W/g,'_') : '0'); }
+  if (/WEBSHELL/.test(msg))        { const p = d.match(/PID=(\d+)/); return 'webshell_' + (p ? p[1] : '0'); }
+  if (/CREDENTIAL ACCESS/.test(msg)) { const p = d.match(/PID=(\d+)/); return 'cred_' + (p ? p[1] : '0'); }
+  if (/PRIVESC.*SUID/i.test(msg))  { const p = d.match(/Datei:\s*(\S+)/); return 'suid_' + (p ? p[1].replace(/\W/g,'_') : '0'); }
+  return 'threat';
+}
+
+// Baut den Gegenmaßnahmen-Button einer Bedrohungskarte aus Meldung + Detail.
+// Liefert '' wenn das Detail (noch) keinen verwertbaren Parameter enthält.
+function _buildThreatAction(rawMsg, detail) {
+  const d = detail || '';
+  const pid  = () => d.match(/PID=(\d+)/);
+  const file = () => d.match(/Datei:\s*(\S+)/);
+  const killBtn = m =>
+    `<button class="tcard-action" data-action="kill_pid" data-param="${m[1]}">☠ Prozess beenden (PID ${m[1]})</button>`;
+
+  if (/ROOTKIT/i.test(rawMsg)) {
+    const fileRef = d.trim().split(/[\s\n]/)[0];
+    if (!fileRef) return '';
+    return `<button class="tcard-action" data-action="remove_rootkit" data-param="${esc(fileRef)}">🔥 Rootkit vollständig entfernen</button>`;
+  }
+  if (/BIND SHELL|NEUER LISTENER/i.test(rawMsg)) { const m = pid(); return m ? killBtn(m) : ''; }
+  if (/ANTI-MONITOR|EXFIL/.test(rawMsg))
+    return `<button class="tcard-action" data-action="isolate_network">🔒 Netzwerk isolieren</button>`;
+  if (/PERSISTENCE/.test(rawMsg)) {
+    const m = file();
+    return m ? `<button class="tcard-action" data-action="remove_file" data-param="${esc(m[1])}">🗑 Datei entfernen</button>` : '';
+  }
+  if (/PRIVESC.*SUID/i.test(rawMsg)) {
+    const m = file();
+    return m ? `<button class="tcard-action" data-action="remove_suid" data-param="${esc(m[1])}">🔧 SUID-Bit entfernen</button>` : '';
+  }
+  if (/WEBSHELL|CREDENTIAL ACCESS/.test(rawMsg)) { const m = pid(); return m ? killBtn(m) : ''; }
+  return '';
+}
+
+// Hängt die Klick-Logik an die Gegenmaßnahmen-Buttons einer Bedrohungskarte.
+function _wireCardActions(root, key) {
+  root.querySelectorAll('.tcard-action').forEach(b => {
+    b.addEventListener('click', async () => {
+      b.disabled = true; b.textContent = '⏳ Entferne…';
+      try {
+        const r = await fetch('/api/countermeasure', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({action: b.dataset.action, param: b.dataset.param||''})
+        });
+        const j = await r.json();
+        if (j.ok) { resolveCard(key, b.dataset.action); }
+        else { b.disabled = false; b.textContent = '✗ ' + (j.msg||'Fehler') + ' – nochmal?'; }
+      } catch(e) { b.disabled = false; b.textContent = '✗ Netzwerkfehler – nochmal?'; }
+    });
+  });
+}
+
+// Hängt die Klick-Logik an die Inline-Buttons einer Feed-Zeile.
+function _wireInlineCm(root) {
+  root.querySelectorAll('.cm-btn').forEach(b => {
+    b.addEventListener('click', async () => {
+      b.disabled = true; b.textContent = '⏳ …';
+      try {
+        const r = await fetch('/api/countermeasure', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({action: b.dataset.action, param: b.dataset.param || ''})
+        });
+        const j = await r.json();
+        b.textContent = j.ok ? '✓ Erledigt' : '✗ ' + (j.msg||'Fehler');
+        b.style.opacity = '0.7';
+        if (j.ok) {
+          document.querySelectorAll(`.cm-btn[data-action="${b.dataset.action}"][data-param="${b.dataset.param||''}"]`).forEach(o => {
+            if (o !== b) { o.disabled = true; o.textContent = '✓ Bereits erledigt'; o.style.opacity = '0.5'; }
+          });
+        }
+      } catch(e) { b.textContent = '✗ Netzwerkfehler'; }
+    });
+  });
+}
+
+function ensureThreatCard(key, firstEv) {
+  if (threatCards.has(key)) return threatCards.get(key);
+
+  const feed = document.getElementById('threat-feed');
+  const tEmpty = document.getElementById('threat-empty');
+  if (tEmpty) tEmpty.style.display = 'none';
+  const card = document.createElement('div');
+  card.className = 'tcard';
+  card.id = 'tcard-' + key;
+
+  const rawMsg = firstEv.message || '';
+  let title = rawMsg.replace(/^ROOTKIT\s*[-–]\s*/i, '').replace(/^BIND SHELL\s*\/\s*/i, '').trim();
+  const isRootkit = /ROOTKIT/i.test(rawMsg);
+  const isBind    = /BIND SHELL|NEUER LISTENER/i.test(rawMsg);
+
+  const actionBtn = _buildThreatAction(rawMsg, firstEv.detail || '');
+
+  card.innerHTML =
+    '<div class="tcard-hdr">' +
+      '<span class="tcard-pulse"></span>' +
+      '<span class="tcard-title">' + esc(title) + '</span>' +
+      '<span class="tcard-since" id="tcard-since-' + key + '">Erkannt ' + esc(firstEv.ts||'') + '</span>' +
+      (actionBtn ? '<div class="tcard-actions" id="tcard-act-' + key + '">' + actionBtn + '</div>' : '') +
+    '</div>' +
+    '<div class="tcard-log" id="tcard-log-' + key + '"></div>';
+
+  feed.appendChild(card);
+  threatN++;
+  document.getElementById('tcnt').textContent = threatN + ' Bedrohungen';
+
+  _wireCardActions(card, key);
+
+  const tab = document.getElementById('tab-threats');
+  if (tab) tab.classList.add('has-live');
+  if (activeTab !== 'threats') {
+    bumpBadge('threats');
+    if ((firstEv.severity||'') === 'CRITICAL') switchTab('threats');
+  }
+
+  const entry = {el: card, resolved: false, actionHtml: actionBtn};
+  threatCards.set(key, entry);
+  return entry;
+}
+
+function addThreat(ev) {
+  const key  = threatKey(ev.message||'', ev.detail||'');
+  const card = ensureThreatCard(key, ev);
+  if (card.resolved) {
+    card.resolved = false;
+    card.el.classList.remove('tcard-resolved');
+    const actEl = document.getElementById('tcard-act-' + key);
+    if (actEl && card.actionHtml) {
+      actEl.innerHTML = card.actionHtml;
+      _wireCardActions(actEl, key);
+    }
+    const pulse = card.el.querySelector('.tcard-pulse');
+    if (pulse) { pulse.style.animation = ''; pulse.style.background = ''; pulse.style.boxShadow = ''; }
+  }
+  const log = document.getElementById('tcard-log-' + key);
+  if (!log) return;
+  const line = document.createElement('div');
+  line.className = 'tcard-line s-' + (ev.severity||'INFO');
+  line.innerHTML =
+    '<span class="tl-ts">' + esc(ev.ts||'') + '</span>' +
+    '<span class="arow-sev s-' + (ev.severity||'') + '" style="font-size:9px;padding:1px 4px">' + (ev.severity||'') + '</span>' +
+    '<span>' + esc(ev.message||'') + (ev.detail ? ' — ' + esc(ev.detail) : '') + '</span>';
+  log.appendChild(line);
+}
+
+function resolveCard(key, action) {
+  const c = threatCards.get(key);
+  if (!c || c.resolved) return;
+  c.resolved = true;
+  c.el.classList.add('tcard-resolved');
+  const actEl = document.getElementById('tcard-act-' + key);
+  if (actEl) actEl.innerHTML = '<span class="tcard-done">✓ Entfernt</span>';
+  const pulse = c.el.querySelector('.tcard-pulse');
+  if (pulse) { pulse.style.animation = 'none'; pulse.style.background = 'var(--low)'; pulse.style.boxShadow = 'none'; }
+}
+
+function handleRootkitCleared(ev) {
+  const fname = (ev.file||'').replace(/^\./, '').split('.')[0];
+  if (fname) {
+    for (const [key, card] of threatCards) {
+      if (key.includes(fname) || fname.includes(key)) resolveCard(key, 'remote');
+    }
+  } else {
+    for (const [key, card] of threatCards) {
+      if (!card.resolved) resolveCard(key, 'remote');
+    }
+  }
+  clearSessRootkitBanner(ev.file || '');
+}
+
+function clearThreats() {
+  document.getElementById('threat-feed').innerHTML =
+    '<div class="ov-empty" id="threat-empty">Keine aktiven Bedrohungen erkannt</div>';
+  threatCards.clear();
+  threatN = 0;
+  document.getElementById('tcnt').textContent = '0 Bedrohungen';
+  document.getElementById('tab-threats')?.classList.remove('has-live');
+  clearBadge('threats');
+}
+
+// ── Rootkit-Banner in Session ──────────────────────────────────
+function markSessRootkit(remote, rkFile, rkPath) {
+  const ky  = k(remote);
+  const pnl = document.getElementById('panel-sess-' + ky);
+  if (!pnl) return;
+  const killParam = rkPath || rkFile;
+  let banner = document.getElementById('sess-rk-' + ky);
+  if (banner) {
+    banner.classList.remove('rk-cleared');
+    banner.querySelector('b').textContent = rkFile;
+    const btn = banner.querySelector('.rk-kill-btn');
+    if (btn) { btn.disabled = false; btn.textContent = '🔥 Rootkit entfernen'; btn.setAttribute('onclick', 'killRootkitFromSess(\''+esc(killParam)+'\',\''+ky+'\')'); }
+  } else {
+    banner = document.createElement('div');
+    banner.className = 'sess-rk-banner';
+    banner.id = 'sess-rk-' + ky;
+    banner.innerHTML =
+      '<span class="rk-pulse"></span>' +
+      '🦠 Rootkit aktiv: <b>' + esc(rkFile) + '</b>' +
+      '<button class="rk-kill-btn" id="sess-rk-btn-' + ky + '" onclick="killRootkitFromSess(\''+esc(killParam)+'\',\''+ky+'\')">' +
+        '🔥 Rootkit entfernen' +
+      '</button>';
+    const hdr = pnl.querySelector('.sess-hdr');
+    if (hdr) hdr.after(banner); else pnl.prepend(banner);
+  }
+  // Rootkit-Indikator in Sidebar-Item setzen
+  const rkEl = document.getElementById('ssrk-' + ky);
+  if (rkEl) rkEl.style.display = '';
+  // Automatisch zum Session-Tab wechseln wenn Threats-Tab aktiv
+  if (activeTab === 'threats') switchTab('sess-' + ky);
+}
+
+async function killRootkitFromSess(rkFile, ky) {
+  const btn = document.getElementById('sess-rk-btn-' + ky);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Entferne…'; }
+  try {
+    const r = await fetch('/api/countermeasure', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'remove_rootkit', param: rkFile})
+    });
+    const j = await r.json();
+    if (j.ok) {
+      if (btn) { btn.textContent = '✓ ' + (j.msg || 'Entfernt'); }
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '✗ Fehler – nochmal?'; }
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '✗ Netzwerkfehler'; }
+  }
+}
+
+function clearSessRootkitBanner(rkFile) {
+  document.querySelectorAll('.sess-rk-banner').forEach(banner => {
+    const bFile = banner.querySelector('b')?.textContent || '';
+    if (!rkFile || rkFile === '?' || bFile.includes(rkFile.split('/').pop()) || rkFile.includes(bFile)) {
+      banner.classList.add('rk-cleared');
+      const btn = banner.querySelector('.rk-kill-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '✓ Entfernt'; }
+      // Sidebar Rootkit-Indikator ausblenden
+      const ky = banner.id.replace('sess-rk-', '');
+      const rkEl = document.getElementById('ssrk-' + ky);
+      if (rkEl) rkEl.style.display = 'none';
+    }
+  });
+}
+
+// Beim Laden: rootkit_state prüfen
+async function checkRootkitState() {
+  try {
+    const r = await fetch('/api/rootkit_state', {cache:'no-store'});
+    if (!r.ok) return;
+    const s = await r.json();
+    if (!s.active) return;
+    const tab = document.getElementById('tab-threats');
+    if (tab.style.display === 'none') tab.style.display = '';
+    const ts = new Date().toTimeString().slice(0,8);
+    const uid = Date.now();
+    if (s.ldpreload) {
+      addThreat({severity:'CRITICAL', message:'ROOTKIT - /etc/ld.so.preload aktiv', detail: s.ldpreload, ts, id:'init_ldpreload_' + uid});
+    }
+    (s.suspicious_files||[]).forEach((f,i) => {
+      addThreat({severity:'HIGH', message:'ROOTKIT - Lib/Modul gefunden', detail: f, ts, id:'init_so_' + uid + '_' + i});
+    });
+    // Set rootkit banners on all session panels (active and ended)
+    const rkPath = s.ldpreload || (s.suspicious_files||[])[0] || '';
+    const rkFile = rkPath ? rkPath.split('/').pop() : '?';
+    if (rkPath) {
+      Object.keys(sessions).forEach(remote => markSessRootkit(remote, rkFile, rkPath));
+    }
+  } catch(_) {}
+}
+
+function patchDet(id, det) {
+  const row = document.querySelector('[data-id="'+id+'"]');
+  if (!row) return;
+  let d = row.querySelector('.arow-det');
+  if (!d) { d = document.createElement('div'); d.className = 'arow-det'; row.appendChild(d); }
+  d.textContent = det;
+
+  // Das Detail trägt den Parameter der Gegenmaßnahme (PID bzw. Datei). Trifft es
+  // erst jetzt ein, fehlen die Buttons noch – sie werden hier nachgerüstet.
+  const msg = row.querySelector('.arow-msg')?.textContent || '';
+  if (!row.querySelector('.arow-cm')) {
+    const html = buildCountermeasureBtns(msg, det);
+    if (html) {
+      const cm = document.createElement('div');
+      cm.className = 'arow-cm';
+      cm.innerHTML = html;
+      row.appendChild(cm);
+      _wireInlineCm(cm);
+    }
+  }
+  _patchThreatAction(msg, det);
+
+  const qv = document.getElementById('q').value.trim().toLowerCase();
+  if (qv) { const txt = row.textContent.toLowerCase(); row.classList.toggle('hidden', !txt.includes(qv)); }
+}
+
+// Rüstet den Aktions-Button einer bereits angelegten Bedrohungskarte nach,
+// sobald das zugehörige Detail eingetroffen ist.
+function _patchThreatAction(msg, det) {
+  if (!THREAT_MSGS.test(msg)) return;
+  const html = _buildThreatAction(msg, det);
+  if (!html) return;
+  // Die Karte wurde ohne Detail angelegt und trägt deshalb den Fallback-Key.
+  const entry = threatCards.get(threatKey(msg, '')) || threatCards.get(threatKey(msg, det));
+  if (!entry || entry.resolved || entry.actionHtml) return;
+  entry.actionHtml = html;
+  const hdr = entry.el.querySelector('.tcard-hdr');
+  let actEl = entry.el.querySelector('.tcard-actions');
+  if (!actEl && hdr) {
+    actEl = document.createElement('div');
+    actEl.className = 'tcard-actions';
+    actEl.id = 'tcard-act-' + entry.el.id.replace(/^tcard-/, '');
+    hdr.appendChild(actEl);
+  }
+  if (!actEl) return;
+  actEl.innerHTML = html;
+  _wireCardActions(actEl, entry.el.id.replace(/^tcard-/, ''));
+}
+
+// ── Stats ──────────────────────────────────────────────────────
+function updStats(s) {
+  const vals = {
+    pc: s.CRITICAL||0, ph: s.HIGH||0, pm: s.MEDIUM||0,
+    pl: s.LOW||0,      pi: s.INFO||0, ps: s.SESSION||0
+  };
+  for (const [id, v] of Object.entries(vals)) {
+    const pill = document.getElementById(id);
+    if (pill) pill.textContent = v;
+    const tile = document.getElementById('ov-' + id);
+    if (tile) tile.textContent = v;
+  }
+  const httpEl = document.getElementById('phttp');
+  if (httpEl) httpEl.textContent = s.HTTP||0;
+}
+
+// ── Übersicht: letzte Ereignisse ───────────────────────────────
+const OV_RECENT_MAX = 12;
+function _pushOverviewRecent(ev) {
+  const list = document.getElementById('ov-recent');
+  if (!list) return;
+  const sev = ev.severity || 'INFO';
+  const emptyEl = document.getElementById('ov-recent-empty');
+  if (emptyEl) emptyEl.style.display = 'none';
+  const item = document.createElement('div');
+  item.className = 'ov-ri ' + sev;
+  item.title = (ev.message||'') + (ev.detail ? '\n' + ev.detail : '');
+  item.onclick = () => switchTab('monitor');
+  item.innerHTML =
+    '<span class="ov-ri-ts">' + esc(ev.ts||'') + '</span>' +
+    '<span class="arow-sev s-' + sev + '">' + sev + '</span>' +
+    '<span class="ov-ri-msg">' + esc(ev.message||'') + '</span>';
+  list.prepend(item);
+  while (list.children.length > OV_RECENT_MAX) list.removeChild(list.lastChild);
+}
+
+// ── Filter ─────────────────────────────────────────────────────
+function flt(pill) {
+  const sev = pill.dataset.s;
+  if (filters.has(sev)) { filters.delete(sev); pill.classList.remove('on'); }
+  else                  { filters.add(sev);    pill.classList.add('on'); }
+  const qv = document.getElementById('q').value.trim().toLowerCase();
+  document.querySelectorAll('.arow').forEach(r => {
+    const sevMatch    = filters.has(r.dataset.sev);
+    const searchMatch = !qv || r.textContent.toLowerCase().includes(qv);
+    r.classList.toggle('hidden', !sevMatch || !searchMatch);
+  });
+}
+
+// ── Search ─────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='f') {
+    e.preventDefault();
+    document.getElementById('search-bar').style.display='flex';
+    document.getElementById('q').focus();
+  }
+  if (e.key==='Escape') closeSearch();
+});
+function closeSearch() {
+  document.getElementById('search-bar').style.display='none';
+  document.getElementById('q').value='';
+  document.querySelectorAll('.arow').forEach(r => r.classList.remove('hidden'));
+  document.getElementById('qcnt').textContent='';
+}
+function doSearch() {
+  const qv = document.getElementById('q').value.trim().toLowerCase();
+  applySearch(qv);
+}
+function applySearch(qv) {
+  let n=0;
+  document.querySelectorAll('.arow').forEach(r => {
+    const match = !qv || r.textContent.toLowerCase().includes(qv);
+    r.classList.toggle('hidden', !match || !filters.has(r.dataset.sev));
+    if (match && filters.has(r.dataset.sev)) n++;
+  });
+  document.getElementById('qcnt').textContent = qv ? n+' Treffer' : '';
+}
+
+// ── Tab System ─────────────────────────────────────────────────
+function switchTab(id) {
+  if (id.startsWith('sess-')) {
+    const ky = id.replace('sess-', '');
+    _selectSessInPanel(ky);
+    id = 'sessions';
+  }
+  activeTab = id;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('#panels > .panel').forEach(p => p.classList.remove('on'));
+  const tab = document.getElementById('tab-' + id);
+  const pnl = document.getElementById('panel-' + id);
+  if (tab) { tab.classList.add('on'); clearBadge(id); }
+  if (pnl) pnl.classList.add('on');
+}
+
+// Selektiert eine Session im Detail-Panel
+function _selectSessInPanel(ky) {
+  document.querySelectorAll('.sess-list-item').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('#sess-detail-wrap > [id^="panel-sess-"]').forEach(el => el.classList.remove('shown'));
+  const item = document.getElementById('ssb-' + ky);
+  if (item) {
+    item.classList.add('on');
+    // Sidebar-Badge zurücksetzen
+    const badge = item.querySelector('.sli-badge');
+    if (badge) { badge.textContent = '0'; badge.classList.remove('show'); }
+  }
+  const pnl = document.getElementById('panel-sess-' + ky);
+  if (pnl) pnl.classList.add('shown');
+  const detEmpty = document.getElementById('sess-detail-empty');
+  if (detEmpty) detEmpty.style.display = pnl ? 'none' : '';
+}
+
+function bumpBadge(id) {
+  if (activeTab === id) return;
+  const b = document.getElementById('badge-' + id);
+  if (!b) return;
+  const n = parseInt(b.textContent||'0') + 1;
+  b.textContent = n > 99 ? '99+' : String(n);
+  b.classList.add('show');
+}
+function clearBadge(id) {
+  const b = document.getElementById('badge-' + id);
+  if (b) { b.textContent='0'; b.classList.remove('show'); }
+}
+
+// Bump für Session-Aktivität: Sidebar-Item-Badge + Sessions-Tab-Badge
+function _bumpSessActivity(ky) {
+  // Sidebar item badge (immer, wenn nicht gerade diese Session angezeigt)
+  const item = document.getElementById('ssb-' + ky);
+  if (item && !item.classList.contains('on')) {
+    const badge = item.querySelector('.sli-badge');
+    if (badge) {
+      const n = parseInt(badge.textContent||'0') + 1;
+      badge.textContent = n > 99 ? '99+' : String(n);
+      badge.classList.add('show');
+    }
+  }
+  // Sessions-Tab-Badge (nur wenn Sessions-Panel nicht aktiv)
+  bumpBadge('sessions');
+}
+
+// ── Session Reaktivierung ──────────────────────────────────────
+function _reactivateSess(remote, started) {
+  const ky = k(remote);
+  const s  = sessions[remote];
+  if (!s) return;
+  s.ended   = null;
+  s.started = started || s.started;
+  s.cntIn   = 0;
+  s.cntOut  = 0;
+  s.pid     = null;
+  s.pids    = [];
+  s._activePid = null;
+  s.generation = (s.generation || 1) + 1;
+  // Ended-Banner entfernen
+  const banner = document.getElementById('ended-' + ky);
+  if (banner) banner.remove();
+  // Implant-Banner der vorigen Session-Instanz entfernen – ihre PIDs gehören
+  // zu einem beendeten Lauf und würden sonst neben den neuen Implants weiter
+  // angezeigt (Reconnect auf dieselbe Remote-Adresse = neue Prozess-Instanz).
+  const pnlForReset = document.getElementById('panel-sess-' + ky);
+  if (pnlForReset) {
+    pnlForReset.querySelectorAll('.sess-impl-banner').forEach(b => b.remove());
+  }
+  const implDot = document.getElementById('ssimpl-' + ky);
+  if (implDot) implDot.remove();
+  // Sidebar-Item reaktivieren
+  const item = document.getElementById('ssb-' + ky);
+  if (item) {
+    item.classList.remove('sess-ended');
+    const pulse = item.querySelector('.sli-pulse');
+    if (pulse) { pulse.style.animation = ''; pulse.style.background = ''; pulse.style.boxShadow = ''; }
+    const timeEl = item.querySelector('.sli-time');
+    if (timeEl) timeEl.textContent = 'seit ' + (started || '?');
+  }
+  // Panel-Pulse reaktivieren
+  const pnl = document.getElementById('panel-sess-' + ky);
+  if (pnl) {
+    const pulse = pnl.querySelector('.sess-pulse');
+    if (pulse) { pulse.style.animation = ''; pulse.style.background = 'var(--crit)'; pulse.style.boxShadow = '0 0 7px var(--crit)'; }
+  }
+  // Kill-Button zurücksetzen
+  const btn = document.getElementById('killbtn-' + ky);
+  if (btn) {
+    btn.classList.remove('killed');
+    btn.disabled = false;
+    btn.innerHTML = '☠ Kill PID <span id="killpid-' + ky + '">?</span>';
+  }
+  const si = document.getElementById('si-' + ky);
+  if (si) si.textContent = '0';
+  const so = document.getElementById('so-' + ky);
+  if (so) so.textContent = '0';
+  _addShellStart(remote, s.started, s.generation, null);
+  startDuration(remote, ky);
+}
+
+// ── Session Erstellung ─────────────────────────────────────────
+function ensureSess(remote, started, logfile, ended) {
+  if (sessionTabs.has(remote)) {
+    const s = sessions[remote];
+    if (s) {
+      if (ended && !s.ended) s.ended = ended;
+      if (!ended && s.ended) _reactivateSess(remote, started);
+    }
+    return;
+  }
+  sessionTabs.add(remote);
+  const ky = k(remote);
+  sessions[remote] = {
+    remote, started: started||'', logfile: logfile||'', ended: ended||null,
+    cntIn:0, cntOut:0, generation:1, pid:null, pids:[],
+    _shellBodies:{}, _pidState:{}, _activePid:null
+  };
+
+  // Sessions-Tab als "live" markieren
+  const sessTab = document.getElementById('tab-sessions');
+  if (sessTab && !ended) sessTab.classList.add('has-live');
+  // Hdr-Pulse anzeigen wenn aktive Session
+  if (!ended) {
+    const p = document.getElementById('sess-hdr-pulse');
+    if (p) p.style.display = '';
+  }
+
+  // Sidebar-Item erstellen
+  const list = document.getElementById('sess-sidebar-list');
+  const emptyEl = document.getElementById('sess-sidebar-empty');
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const item = document.createElement('div');
+  item.className = 'sess-list-item' + (ended ? ' sess-ended' : '');
+  item.id = 'ssb-' + ky;
+  item.innerHTML =
+    '<span class="sli-pulse"></span>' +
+    '<div class="sli-info">' +
+      '<span class="sli-remote">' + esc(remote) + '</span>' +
+      '<span class="sli-time">seit ' + esc(started||'?') + '</span>' +
+    '</div>' +
+    '<span class="sli-rk" id="ssrk-' + ky + '" title="Rootkit aktiv" style="display:none">🦠</span>' +
+    '<span class="sli-badge" id="ssbadge-' + ky + '"></span>' +
+    '<span class="sli-x" onclick="closeSess(event,\''+ky+'\')">×</span>';
+  item.onclick = e => { if (!e.target.classList.contains('sli-x')) switchTab('sess-' + ky); };
+  list.appendChild(item);
+
+  // Sidebar-Zähler aktualisieren
+  _updateSessSidebarCnt();
+
+  // Session-Panel in Detail-Wrap erstellen
+  const pnl = document.createElement('div');
+  pnl.id = 'panel-sess-' + ky;
+  pnl.innerHTML =
+    '<div class="sess-hdr">' +
+      '<span class="sess-pulse"></span>' +
+      '<span class="sess-remote">' + esc(remote) + '</span>' +
+      '<span class="sess-since" id="since-'+ky+'">seit '+(started||'?')+'</span>' +
+      '<span class="sess-dur" id="dur-'+ky+'"></span>' +
+      '<div class="sess-stats">' +
+        'Befehle: <b id="si-'+ky+'">0</b>' +
+        ' &nbsp; Outputs: <b id="so-'+ky+'">0</b>' +
+      '</div>' +
+      '<button class="kill-btn" id="killbtn-'+ky+'" onclick="killSession(\''+esc(remote)+'\')" title="Reverse Shell via SIGKILL beenden">☠ Kill PID <span id="killpid-'+ky+'">?</span></button>' +
+      '<div class="block-panel" id="blockpanel-'+ky+'">' +
+        _buildBlockPanel(remote, ky) +
+      '</div>' +
+    '</div>'+
+    '<div class="sess-logfile" id="lf-'+ky+'" style="display:'+(logfile?'block':'none')+'">' +
+      (logfile ? '📄 tail -f ' + esc(logfile) : '') +
+    '</div>' +
+    '<div class="terminal" id="term-'+ky+'"></div>' +
+    '<div class="sess-foot">' +
+      '<label><input type="checkbox" id="sas-'+ky+'" checked> Auto-Scroll</label>' +
+      '<button class="hdr-btn" onclick="clearTerm(\''+ky+'\')" style="margin-left:auto">Clear</button>' +
+      '<span style="color:var(--dim);font-size:10px" id="slen-'+ky+'">0 Zeilen</span>' +
+    '</div>';
+  document.getElementById('sess-detail-wrap').appendChild(pnl);
+
+  if (!ended) _addShellStart(remote, started, 1, null);
+  if (ended) markEnded(remote, ended);
+  // Falls IP/Port dieser Session bereits gesperrt ist: Banner sofort setzen.
+  _updateSessBlockBanner(ky, remote);
+  startDuration(remote, ky);
+}
+
+function _updateSessSidebarCnt() {
+  const activeCnt = Object.values(sessions).filter(s => !s.ended).length;
+  const el = document.getElementById('sess-sidebar-cnt');
+  if (el) el.textContent = activeCnt + ' aktiv';
+  const p = document.getElementById('sess-hdr-pulse');
+  if (p) p.style.display = activeCnt > 0 ? '' : 'none';
+  // Sidebar-Pulse + Übersichts-Kachel
+  document.getElementById('tab-sessions')?.classList.toggle('has-live', activeCnt > 0);
+  const ov = document.getElementById('ov-sess-state');
+  if (ov) {
+    ov.textContent = activeCnt > 0 ? activeCnt + ' AKTIV' : 'KEINE';
+    ov.className = 'ov-prot-state ' + (activeCnt > 0 ? 'st-on' : 'st-off');
+  }
+}
+
+function _addShellStart(remote, started, generation, pid) {
+  const ky = k(remote);
+  const s = sessions[remote];
+  const term = document.getElementById('term-' + ky);
+  if (!term || !s) return null;
+  const pidKey = pid ? String(pid) : '__pending_' + String(generation || 1);
+  if (s._shellBodies[pidKey]) return s._shellBodies[pidKey];
+
+  const group = document.createElement('section');
+  group.className = 'shell-group' + (pid ? ' active' : '');
+  group.dataset.pid = pid ? String(pid) : '';
+  const row = document.createElement('div');
+  row.className = 'shell-start';
+  const sessionLabel = /:53$/.test(remote) ? '◉ DNS/UDP SESSION' : '⚡ NEUE SHELL #' + esc(String(generation || 1));
+  row.innerHTML =
+    '<span class="shell-start-badge">' + sessionLabel + '</span>' +
+    '<span class="shell-start-pid'+(pid?'':' pending')+'" data-session="'+esc(ky)+'">PID ' + esc(pid || '?') + '</span>' +
+    '<span class="shell-start-remote">' + esc(remote) + '</span>' +
+    '<span class="shell-start-time">verbunden um ' + esc(started || '?') + '</span>';
+  const body = document.createElement('div');
+  body.className = 'shell-group-body';
+  body.dataset.pidKey = pidKey;
+  group.appendChild(row);
+  group.appendChild(body);
+  term.appendChild(group);
+  s._shellBodies[pidKey] = body;
+  if (pid) s._activePid = String(pid);
+  term.scrollTop = term.scrollHeight;
+  return body;
+}
+
+function _ensurePidShell(remote, pid, started) {
+  const s = sessions[remote];
+  if (!s) return null;
+  s._shellBodies ||= {};
+  s._pidState ||= {};
+
+  const realPid = pid && String(pid) !== '?' ? String(pid) : null;
+  if (realPid && s._shellBodies[realPid]) {
+    s._activePid = realPid;
+    return s._shellBodies[realPid];
+  }
+  if (!realPid && s._activePid && s._shellBodies[s._activePid]) {
+    return s._shellBodies[s._activePid];
+  }
+
+  const pendingKey = Object.keys(s._shellBodies).find(key => key.startsWith('__pending_'));
+  if (realPid && pendingKey) {
+    const body = s._shellBodies[pendingKey];
+    const group = body.closest('.shell-group');
+    const badge = group?.querySelector('.shell-start-pid');
+    if (badge) {
+      badge.textContent = 'PID ' + realPid;
+      badge.classList.remove('pending');
+    }
+    if (group) { group.dataset.pid = realPid; group.classList.add('active'); }
+    delete s._shellBodies[pendingKey];
+    s._shellBodies[realPid] = body;
+    body.dataset.pidKey = realPid;
+    s._activePid = realPid;
+    return body;
+  }
+  if (!realPid && pendingKey) return s._shellBodies[pendingKey];
+
+  s.generation = (s.generation || 0) + 1;
+  return _addShellStart(remote, started || new Date().toTimeString().slice(0,8), s.generation, realPid);
+}
+
+function termLine(remote, dir, data, ts, anim, eventPid) {
+  const ky = k(remote);
+  const s  = sessions[remote];
+  const term = document.getElementById('term-' + ky);
+  if (!term || !s) return;
+  if (eventPid) s.pid = String(eventPid);
+
+  if (/^\[(?:IN|OUT)[^\]]*\]\s+[\d.]+:\d+/.test(data)) return;
+  if (/^TUNNEL SESSION (AKTIV|BEENDET|ERKANNT)/.test(data)) return;
+  if (/^BEACONING\s*–|^NEUE VERBINDUNG/.test(data)) return;
+  if (!data || data.trim().length < 2) return;
+  if (/^(exit|logout|Connection closed\.?|Killed\.?|Terminated\.?)$/i.test(data.trim())) return;
+
+  if (!s._seen) s._seen = [];
+  const resolvedPid = eventPid ? String(eventPid) : (s._activePid || null);
+  const target = _ensurePidShell(remote, resolvedPid, ts) || term;
+  const pidKey = target.dataset?.pidKey || resolvedPid || '__unknown';
+  s._pidState ||= {};
+  const ps = s._pidState[pidKey] ||= {cwd:'', commandOpen:false};
+
+  const dk = pidKey + '|' + (ts||'') + '|' + data;
+  if (s._seen.includes(dk)) return;
+  s._seen.push(dk);
+  if (s._seen.length > 150) s._seen.splice(0, 50);
+
+  const dnsCommand = data.match(/^DNS CMD:\s*(.+)$/i);
+  if (dnsCommand) {
+    ps.commandOpen = true;
+    _addCmdSep(target, dnsCommand[1], ts, ky, anim, 'DNS-Tunnel', resolvedPid);
+    return;
+  }
+
+  const kpdgWrapped = data.match(/(?:echo;\s*)?echo\s+['"]?KPDG_S_[0-9a-f]+['"]?;\s*\((.+?)\)\s*2>&1\s*\|\s*cat/i);
+  if (kpdgWrapped) {
+    const bracketCwd = data.match(/(?:^|\s)[#$]\s+\[([^\]]+)\]\s+/);
+    const promptCwd  = data.match(/[\w.@-]+:(\/[^\s#$]*)\s*[#$]\s+/);
+    if (bracketCwd) ps.cwd = bracketCwd[1];
+    else if (promptCwd) ps.cwd = promptCwd[1];
+    ps.commandOpen = true;
+    _addCmdSep(target, kpdgWrapped[1], ts, ky, anim, ps.cwd || 'unbekannt', resolvedPid);
+    return;
+  }
+
+  const kpdgLegacy = data.match(/echo\s+KPDG[0-9a-f]+;\s*\((.+?)\)\s*2>&1/i);
+  if (kpdgLegacy) {
+    ps.commandOpen = true;
+    _addCmdSep(target, kpdgLegacy[1], ts, ky, anim, ps.cwd || 'unbekannt', resolvedPid);
+    return;
+  }
+
+  if (/^KPDG_S_[0-9a-f]{10,}$/i.test(data.trim())) { ps.commandOpen = true; return; }
+  if (/^KPDG_E_[0-9a-f]{10,}$/i.test(data.trim())) { ps.commandOpen = false; return; }
+  if (/KPDG_[SE]_[0-9a-f]{10,}/i.test(data)) return;
+  if (/^KPDG[0-9a-f]{10,}$/i.test(data.trim())) return;
+
+  function _isOutput(d) {
+    return (
+      /^\w+:x:\d+:\d+:/.test(d)             ||
+      /^[d-][rwx-]{9}\s+\d+\s+\w+/.test(d) ||
+      /^total \d+$/.test(d)                 ||
+      /^uid=\d+\(/.test(d)                  ||
+      /^[-\w]+\s+\d+\s+[\w-]+\s+[\w-]+\s+\d+\s+\w+\s+\d+/.test(d) ||
+      /^\s*\d+ \d{4}-\d{2}-\d{2}/.test(d)  ||
+      (/^\/[a-z]/.test(d) && !/^\/dev\/tcp/.test(d))
+    );
+  }
+
+  const isInDir  = dir && (dir.includes('←') || dir.toUpperCase().includes('IN'));
+  const isPrompt = /[\w@-]+:\/[\w./~-]*[\s]*[#$]\s*$/.test(data);
+  const isSens   = /(uid=\d|gid=\d|root:x:0|password|secret)/i.test(data) && !/KPDG/.test(data);
+  const isHttp   = /^HTTP\/[\d.]+ \d{3}|^(GET|POST|PUT|DELETE|HEAD) \//.test(data);
+  const isDnsQuery = /^DNS QUERY\s/i.test(data);
+  const isDnsReply = /:53$/.test(remote) && !isDnsQuery && dir &&
+                     (dir.includes('←') || dir.toUpperCase().includes('IN'));
+  const isOutput = !isPrompt && (ps.commandOpen || _isOutput(data));
+
+  let cls, sym;
+  if (s.ended)       { cls = 'ended';  sym = '·'; }
+  else if (isDnsQuery) { cls = 'dnsq'; sym = '⇢'; }
+  else if (isDnsReply) { cls = 'dnsr'; sym = '⇠'; }
+  else if (isPrompt) { cls = 'prompt'; sym = '$'; }
+  else if (isSens)   { cls = 'sens';   sym = '⚠'; }
+  else if (isHttp)   { cls = 'http';   sym = '⌁'; }
+  else if (isOutput) { cls = 'out';    sym = '←'; }
+  else if (isInDir)  { cls = 'cmd';    sym = '→'; }
+  else               { cls = 'out';    sym = '←'; }
+
+  const row = document.createElement('div');
+  row.className = 'tl ' + cls;
+  if (!anim) row.style.animation = 'none';
+  row.innerHTML =
+    '<span class="tl-ts">'  + esc(ts||'') + '</span>' +
+    '<span class="tl-dir">' + sym + '</span>' +
+    '<span class="tl-data">'+ esc(data) + '</span>';
+  target.appendChild(row);
+
+  if (!s.ended) {
+    if (cls === 'cmd' || cls === 'prompt') {
+      s.cntIn++;  document.getElementById('si-'+ky).textContent = s.cntIn;
+    } else if (cls !== 'http') {
+      s.cntOut++; document.getElementById('so-'+ky).textContent = s.cntOut;
+    }
+    const lbl = document.getElementById('slen-' + ky);
+    if (lbl) lbl.textContent = (s.cntIn + s.cntOut) + ' Zeilen';
+  }
+
+  const asBox = document.getElementById('sas-' + ky);
+  if (asBox && asBox.checked) term.scrollTop = term.scrollHeight;
+  while (term.children.length > MAX_TERM) term.removeChild(term.firstChild);
+}
+
+function _addCmdSep(term, cmd, ts, ky, anim, cwd, eventPid) {
+  const remote = Object.keys(sessions).find(r => k(r) === ky);
+  const sess   = remote ? sessions[remote] : null;
+  const pid    = eventPid || sess?._activePid || null;
+  const pidLabel = 'PID\u202f' + (pid || '?');
+  const pidPending = pid ? '' : ' pending';
+
+  const hr = document.createElement('div');
+  hr.className = 'cmd-sep';
+  if (!anim) hr.style.animation = 'none';
+  hr.innerHTML =
+    '<span class="cmd-sep-line"></span>' +
+    '<span class="cmd-sep-pid'+pidPending+'" data-session="'+esc(ky)+'">' + esc(pidLabel) + '</span>' +
+    '<span class="cmd-sep-cwd" title="Arbeitsverzeichnis">📁 ' + esc(cwd || 'unbekannt') + '</span>' +
+    '<span class="cmd-sep-text">Befehl: <span style="color:var(--low)">$</span> ' + esc(cmd) + '</span>' +
+    '<span class="cmd-sep-ts">' + esc(ts||'') + '</span>' +
+    '<span class="cmd-sep-line"></span>';
+  term.appendChild(hr);
+  const s = sess;
+  if (s) { s.cntIn++; document.getElementById('si-'+ky).textContent = s.cntIn; }
+  const asBox = document.getElementById('sas-' + ky);
+  if (asBox && asBox.checked) term.scrollTop = term.scrollHeight;
+}
+
+function markShellsEnded(remote, pids, ended, reason) {
+  const ky = k(remote);
+  const term = document.getElementById('term-' + ky);
+  if (!term) return;
+  const wanted = new Set((pids || []).filter(Boolean).map(String));
+  let groups = [...term.querySelectorAll('.shell-group')].filter(group =>
+    wanted.size && wanted.has(String(group.dataset.pid || ''))
+  );
+  if (!groups.length) {
+    const active = [...term.querySelectorAll('.shell-group.active:not(.ended)')];
+    if (active.length) groups = [active[active.length - 1]];
+  }
+  const auto = reason === 'autokill';
+  const killed = auto || reason === 'killed';
+  const label = auto ? '☠ AUTO-KILL' : (killed ? '☠ GEKILLT' : '✓ BEENDET');
+  groups.forEach(group => {
+    group.classList.remove('active');
+    group.classList.add('ended');
+    const header = group.querySelector('.shell-start');
+    if (!header) return;
+    let flag = header.querySelector('.shell-end-flag');
+    if (!flag) {
+      flag = document.createElement('span');
+      flag.className = 'shell-end-flag';
+      const timeEl = header.querySelector('.shell-start-time');
+      header.insertBefore(flag, timeEl || null);
+    }
+    flag.classList.toggle('autokill', auto);
+    flag.textContent = label + (ended ? ' · ' + ended : '');
+    flag.title = 'Diese Shell-Session besteht nicht mehr';
+  });
+}
+
+function markEnded(remote, ended) {
+  const ky  = k(remote);
+  const pnl = document.getElementById('panel-sess-' + ky);
+  if (!pnl) return;
+  // Pulse stoppen
+  const pulse = pnl.querySelector('.sess-pulse');
+  if (pulse) { pulse.style.animation = 'none'; pulse.style.background = 'var(--dim2)'; pulse.style.boxShadow = 'none'; }
+  // Beendet-Banner
+  let b = document.getElementById('ended-'+ky);
+  if (!b) {
+    b = document.createElement('div');
+    b.className = 'sess-ended-banner'; b.id = 'ended-' + ky;
+    pnl.insertBefore(b, pnl.querySelector('.terminal'));
+  }
+  b.textContent = '✓ Session beendet um ' + ended;
+  // Sidebar-Item als beendet markieren
+  const item = document.getElementById('ssb-' + ky);
+  if (item) {
+    item.classList.add('sess-ended');
+    const sliPulse = item.querySelector('.sli-pulse');
+    if (sliPulse) { sliPulse.style.animation = 'none'; sliPulse.style.background = 'var(--dim2)'; sliPulse.style.boxShadow = 'none'; }
+    const timeEl = item.querySelector('.sli-time');
+    if (timeEl) timeEl.textContent = 'beendet ' + ended;
+  }
+  _updateSessSidebarCnt();
+}
+
+function closeSess(e, ky) {
+  e.stopPropagation();
+  // Sidebar-Item entfernen
+  document.getElementById('ssb-' + ky)?.remove();
+  // Session-Panel entfernen
+  document.getElementById('panel-sess-' + ky)?.remove();
+  // State bereinigen
+  for (const [r] of Object.entries(sessions)) {
+    if (k(r) === ky) { delete sessions[r]; sessionTabs.delete(r); break; }
+  }
+  // Falls dieses Panel angezeigt wurde → Detail-Empty zeigen
+  const detEmpty = document.getElementById('sess-detail-empty');
+  if (detEmpty) detEmpty.style.display = '';
+  // Sidebar-Empty anzeigen wenn keine Sessions mehr
+  if (sessionTabs.size === 0) {
+    const emptyEl = document.getElementById('sess-sidebar-empty');
+    if (emptyEl) emptyEl.style.display = '';
+    document.getElementById('tab-sessions')?.classList.remove('has-live');
+  }
+  if (activeTab === 'sessions' && sessionTabs.size === 0) switchTab('overview');
+  _updateSessSidebarCnt();
+}
+
+function clearTerm(ky) { const t=document.getElementById('term-'+ky); if(t) t.innerHTML=''; }
+
+// ── Session-Dauer-Timer ────────────────────────────────────────
+function startDuration(remote, ky) {
+  const start = Date.now();
+  const lbl   = () => document.getElementById('dur-' + ky);
+  const tick  = () => {
+    const el = lbl();
+    if (!el) return;
+    const s = sessions[remote];
+    if (s?.ended) { el.textContent = '(beendet)'; return; }
+    const sec = Math.floor((Date.now() - start) / 1000);
+    const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s2 = sec%60;
+    el.textContent = (h ? h+'h ' : '') + (m ? m+'m ' : '') + s2+'s';
+    setTimeout(tick, 1000);
+  };
+  setTimeout(tick, 1000);
+}
+
+// ── Kill Session ──────────────────────────────────────────────
+async function killSession(remote) {
+  const ky  = k(remote);
+  const btn = document.getElementById('killbtn-' + ky);
+  const pid = sessions[remote]?.pid || '?';
+
+  if (!confirm(
+    `⚠ Reverse Shell beenden?\n\nRemote: ${remote}\nPID:    ${pid}\n\nDer Prozess wird mit SIGKILL beendet.\nDie Verbindung zu ${remote} wird sofort getrennt.`
+  )) return;
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Killing...'; }
+
+  try {
+    const resp = await fetch('/api/kill/' + encodeURIComponent(remote), { method: 'POST' });
+    const data = await resp.json();
+
+    if (data.ok) {
+      if (btn) { btn.classList.add('killed'); btn.textContent = '✓ Killed'; }
+      const killTs = data.ts || new Date().toTimeString().slice(0,8);
+      const term = document.getElementById('term-' + ky);
+      if (term) {
+        const body = _ensurePidShell(remote, pid, killTs) || term;
+        const row = document.createElement('div');
+        row.className = 'tl sens';
+        row.innerHTML =
+          '<span class="tl-ts">' + esc(killTs) + '</span>' +
+          '<span class="tl-dir">☠</span>' +
+          '<span class="tl-data">Prozess PID ' + esc(String(pid)) + ' via SIGKILL beendet</span>';
+        body.appendChild(row);
+        term.scrollTop = term.scrollHeight;
+      }
+      markShellsEnded(remote, data.pids || [pid], killTs, 'killed');
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '☠ Kill PID ' + pid; }
+      alert('Kill fehlgeschlagen:\n' + (data.error || JSON.stringify(data.results)));
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '☠ Kill PID ' + pid; }
+    alert('Netzwerkfehler: ' + e);
+  }
+}
+
+// ── Autokill ───────────────────────────────────────────────────
+let autokillEnabled = false;
+
+function setAutokillUI(enabled) {
+  autokillEnabled = enabled;
+  const wrap = document.getElementById('akwrap');
+  if (wrap) wrap.classList.toggle('on', enabled);
+  _setProtState('ak', enabled, enabled ? 'AKTIV' : 'INAKTIV', 'st-on', 'is-on');
+}
+
+// Setzt Badge im Schutz-Panel + Kachel in der Übersicht
+function _setProtState(key, on, text, onCls, cardCls) {
+  const badge = document.getElementById('prot-' + key + '-badge');
+  if (badge) badge.className = 'prot-state-badge ' + (on ? onCls : 'st-off');
+  if (badge) badge.textContent = text;
+  const ov = document.getElementById('ov-' + key + '-state');
+  if (ov) { ov.className = 'ov-prot-state ' + (on ? onCls : 'st-off'); ov.textContent = text; }
+  const card = document.getElementById('prot-card-' + key);
+  if (card) {
+    card.classList.remove('is-on', 'is-on-warn', 'is-on-iso');
+    if (on) card.classList.add(cardCls);
+  }
+}
+
+async function toggleAutokill() {
+  const newState = !autokillEnabled;
+  if (newState) {
+    const ok = confirm(
+      '⚠ AUTO-KILL aktivieren?\n\n' +
+      'Alle erkannten Reverse-Shell-PIDs werden SOFORT und AUTOMATISCH beendet.\n\n' +
+      'Trotzdem aktivieren?'
+    );
+    if (!ok) return;
+  }
+  try {
+    const r = await fetch('/api/autokill', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled: newState})
+    });
+    const d = await r.json();
+    setAutokillUI(d.enabled);
+  } catch(e) {
+    alert('Fehler: ' + e);
+  }
+}
+
+// ── Auto-Entfernen (Rootkit Auto-Remove) ──────────────────────
+let autoNeutralizeEnabled = false;
+
+function setAutoNeutralizeUI(enabled) {
+  autoNeutralizeEnabled = enabled;
+  const wrap = document.getElementById('anwrap');
+  if (wrap) wrap.classList.toggle('on', enabled);
+  _setProtState('an', enabled, enabled ? 'AKTIV' : 'INAKTIV', 'st-warn', 'is-on-warn');
+}
+
+async function toggleAutoNeutralize() {
+  const newState = !autoNeutralizeEnabled;
+  if (newState) {
+    const ok = confirm(
+      '⚠ AUTO-ENTFERNEN aktivieren?\n\n' +
+      'Erkannte Rootkits werden SOFORT und AUTOMATISCH entfernt:\n' +
+      '• /etc/ld.so.preload wird geleert\n' +
+      '• .so/.ko Dateien in /tmp und /dev/shm werden gelöscht\n\n' +
+      'Trotzdem aktivieren?'
+    );
+    if (!ok) return;
+  }
+  try {
+    const r = await fetch('/api/auto_neutralize', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled: newState})
+    });
+    const d = await r.json();
+    setAutoNeutralizeUI(d.enabled);
+  } catch(e) { alert('Fehler: ' + e); }
+}
+
+function handleRootkitCorrelation(ev) {
+  if (!ev.sessions || !ev.sessions.length) return;
+  const msg = ev.rk_msg || '';
+  let resolvedKey = threatKey(msg, ev.detail || '');
+  let card = threatCards.get(resolvedKey);
+  if (!card) {
+    for (const [k2, c2] of threatCards) {
+      resolvedKey = k2; card = c2; break;
+    }
+    if (!card) return;
+  }
+  const log = document.getElementById('tcard-log-' + resolvedKey);
+  if (!log) return;
+  let corrEl = log.querySelector('.tcard-correlation');
+  if (!corrEl) {
+    corrEl = document.createElement('div');
+    corrEl.className = 'tcard-correlation';
+    log.appendChild(corrEl);
+  }
+  const sessLinks = ev.sessions.map(s =>
+    `<span class="corr-sess" onclick="switchTab('sess-${k(s.remote)}')" title="PID: ${esc(s.pid||'?')}">${esc(s.remote)}</span>`
+  ).join(', ');
+  corrEl.innerHTML = '🔗 Aktive Session(s): ' + sessLinks;
+
+  // Rootkit-Warnung in Session-Panels
+  const _det = ev.detail || '';
+  let rkFilePath = '';
+  if (_det.startsWith('/')) {
+    rkFilePath = _det.trim().split(/[\s\n]/)[0];
+  } else {
+    const _pm = _det.match(/(\/[^\s'"]+\.(?:so|ko)(?:\.\d+)?)/);
+    if (_pm) rkFilePath = _pm[1];
+  }
+  let rkFileName = rkFilePath ? rkFilePath.split('/').pop() : '';
+  const _GENERIC_KEYS = new Set(['threat','anti_monitor','container_escape','exfil']);
+  if (!rkFileName) {
+    let _rkKey = (!_GENERIC_KEYS.has(resolvedKey)) ? resolvedKey : '';
+    if (!_rkKey) {
+      for (const [k2] of threatCards) {
+        if (!_GENERIC_KEYS.has(k2) && !k2.startsWith('bindshell_')) { _rkKey = k2; break; }
+      }
+    }
+    if (_rkKey) { rkFileName = '.' + _rkKey + '.so'; rkFilePath = '/tmp/' + rkFileName; }
+  }
+  if (!rkFileName) rkFileName = '?';
+  ev.sessions.forEach(s => markSessRootkit(s.remote, rkFileName, rkFilePath));
+}
+
+// ── Implant-Korrelation ────────────────────────────────────────────
+function handleImplantCorrelation(ev) {
+  if (!ev.sessions || !ev.sessions.length) return;
+  const pid   = ev.pid  || '?';
+  const role  = (ev.role || 'IMPLANT').toUpperCase();
+  const name  = ev.name || 'kworker';
+  const msg   = ev.impl_msg || ev.detail || '';
+
+  // Threat-Karte aktualisieren/erstellen
+  const tkey = 'implant:' + pid;
+  if (!threatCards.has(tkey)) {
+    addAlert({
+      severity: 'CRITICAL',
+      message:  ev.impl_msg || 'IMPLANT - Fake kworker',
+      detail:   ev.detail || '',
+      ts:       ev.ts || new Date().toTimeString().slice(0,8),
+      id:       ev.impl_id || tkey,
+    }, false);
+  }
+
+  // Alle Sessions markieren
+  ev.sessions.forEach(s => markSessImplant(s.remote, pid, role, name, msg));
+}
+
+function markSessImplant(remote, pid, role, name, detail) {
+  const ky  = k(remote);
+  const pnl = document.getElementById('panel-sess-' + ky);
+  if (!pnl) return;
+  const bannerId = 'sess-impl-' + ky + '-' + pid;
+  let banner = document.getElementById(bannerId);
+  const roleClass = role === 'WATCHDOG' ? 'watchdog' : (role === 'WORKER' ? 'worker' : '');
+  if (banner) {
+    banner.classList.remove('impl-cleared');
+    banner.querySelector('.impl-pid').textContent = pid;
+  } else {
+    banner = document.createElement('div');
+    banner.className = 'sess-impl-banner';
+    banner.id = bannerId;
+    banner.dataset.pid = pid;
+    banner.innerHTML =
+      '<span class="impl-pulse"></span>' +
+      '🕵 Implant: <b>' + esc(name) + '</b>' +
+      '<span class="impl-role ' + roleClass + '">' + esc(role) + '</span>' +
+      ' PID <b class="impl-pid">' + esc(pid) + '</b>' +
+      '<button class="impl-kill-btn" onclick="killImplantPid(\'' + esc(pid) + '\',\'' + ky + '\')">' +
+        '⚡ Kill' +
+      '</button>';
+    const rkBanner = pnl.querySelector('.sess-rk-banner');
+    const hdr      = pnl.querySelector('.sess-hdr');
+    if (rkBanner) rkBanner.after(banner);
+    else if (hdr) hdr.after(banner);
+    else pnl.prepend(banner);
+  }
+  // Sidebar-Indikator (lila Punkt)
+  const ssEl = document.getElementById('ssrk-' + ky);
+  if (!ssEl) {
+    const li = document.getElementById('sess-' + ky);
+    if (li) {
+      const sp = document.createElement('span');
+      sp.id = 'ssimpl-' + ky;
+      sp.title = 'Implant aktiv';
+      sp.style.cssText = 'display:inline-block;width:7px;height:7px;border-radius:50%;background:#cc55ff;box-shadow:0 0 4px #cc55ff;margin-left:4px;vertical-align:middle';
+      li.querySelector('.sess-label')?.appendChild(sp);
+    }
+  }
+}
+
+function handleImplantCleared(ev) {
+  clearSessImplantBanner(ev.pid || '');
+}
+
+function clearSessImplantBanner(pid) {
+  document.querySelectorAll('.sess-impl-banner').forEach(banner => {
+    if (!pid || banner.dataset.pid === pid || pid === '?') {
+      banner.classList.add('impl-cleared');
+      const btn = banner.querySelector('.impl-kill-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '✓ Beendet'; }
+      const ky = banner.id.replace(/^sess-impl-/, '').replace(/-\d+$/, '');
+      const sp = document.getElementById('ssimpl-' + ky);
+      if (sp) sp.style.display = 'none';
+    }
+  });
+}
+
+async function killImplantPid(pid, ky) {
+  const btn = document.querySelector('#sess-impl-' + ky + '-' + pid + ' .impl-kill-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch('/api/countermeasure', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'kill_pid', param: pid})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      clearSessImplantBanner(pid);
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Kill'; }
+      addLog('⚠ Kill PID ' + pid + ' fehlgeschlagen: ' + (d.msg||''));
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ Kill'; }
+  }
+}
+
+// Eine Gegenmaßnahme wurde ausgeführt – egal von wo (Karte, Feed, Automatik).
+// Sperrt alle Buttons, die dasselbe Ziel betreffen, damit ein bereits erledigter
+// Eingriff nicht erneut gegen eine verschwundene Datei oder PID läuft.
+function handleCountermeasureApplied(ev) {
+  if (!ev || !ev.ok) return;
+  const param = (ev.param || '').trim();
+  _markCmDone(ev.action, param);
+  // Eine entfernte Datei lässt sich auch nicht mehr anzeigen.
+  if (ev.action === 'remove_file' && param) _markCmDone('show_file', param);
+  // Ein beendeter Prozess ist auch nicht mehr zu beenden.
+  if (ev.action === 'kill_pid' && param) _markCmDone('kill_pid', param);
+}
+
+function _markCmDone(action, param) {
+  const sel = param
+    ? `[data-action="${action}"][data-param="${CSS.escape(param)}"]`
+    : `[data-action="${action}"]`;
+  document.querySelectorAll('.cm-btn' + sel).forEach(b => {
+    if (b.disabled) return;
+    b.disabled = true;
+    b.textContent = '✓ Erledigt';
+    b.style.opacity = '0.5';
+    b.title = 'Diese Gegenmaßnahme wurde bereits ausgeführt';
+  });
+  document.querySelectorAll('.tcard-action' + sel).forEach(b => {
+    const card = b.closest('.tcard');
+    if (card) resolveCard(card.id.replace(/^tcard-/, ''), action);
+  });
+}
+
+function handleAutoNeutralizeApplied(ev) {
+  const sev = ev.ok ? 'HIGH' : 'CRITICAL';
+  const msg = ev.ok
+    ? '🤖 AUTO-ENTFERNEN – Rootkit automatisch entfernt'
+    : '⚠ AUTO-ENTFERNEN – Fehler beim Entfernen';
+  addAlert({type:'alert', severity: sev, ts: ev.ts, message: msg, detail: ev.msg||''}, true);
+}
+
+// ── Block Panel ────────────────────────────────────────────────
+let _blockState = {};
+
+function _buildBlockPanel(remote, ky) {
+  const lastColon = remote.lastIndexOf(':');
+  const ip   = remote.slice(0, lastColon);
+  const port = remote.slice(lastColon + 1);
+  const ipBlocked   = !!_blockState['ip:' + ip];
+  const portBlocked = !!_blockState['port:' + port];
+  return (
+    '<button class="block-btn' + (ipBlocked ? ' blocked' : '') + '" ' +
+    'id="blockip-'+ky+'" onclick="toggleBlock(\''+esc(remote)+'\',\'ip\')">' +
+    (ipBlocked ? '✅ IP ' + esc(ip) + ' gesperrt' : '🔒 IP ' + esc(ip)) + '</button>' +
+    '<button class="block-btn' + (portBlocked ? ' blocked' : '') + '" ' +
+    'id="blockport-'+ky+'" onclick="toggleBlock(\''+esc(remote)+'\',\'port\')">' +
+    (portBlocked ? '✅ Port ' + esc(port) + ' gesperrt' : '🔒 Port ' + esc(port)) + '</button>'
+  );
+}
+
+function _updateBlockPanel(ky, remote) {
+  const panel = document.getElementById('blockpanel-' + ky);
+  if (panel) panel.innerHTML = _buildBlockPanel(remote, ky);
+  _updateSessBlockBanner(ky, remote);
+}
+
+// Zeigt einen deutlichen Banner, sobald IP oder Port der Session gesperrt ist.
+// Wichtig, weil der Monitor auf Paket-Ebene (Raw Socket) schnüffelt und
+// eingehende Befehle weiter MITSCHNEIDET, obwohl die iptables-INPUT-Regel sie
+// verwirft – die Shell führt sie nicht mehr aus.
+function _updateSessBlockBanner(ky, remote) {
+  const pnl = document.getElementById('panel-sess-' + ky);
+  if (!pnl) return;
+  const lastColon = remote.lastIndexOf(':');
+  const ip   = remote.slice(0, lastColon);
+  const port = remote.slice(lastColon + 1);
+  const ipB   = !!_blockState['ip:' + ip];
+  const portB = !!_blockState['port:' + port];
+  let banner = document.getElementById('sess-block-' + ky);
+  if (!ipB && !portB) { if (banner) banner.remove(); return; }
+  const was = ipB && portB ? 'IP ' + esc(ip) + ' und Port ' + esc(port)
+            : ipB ? 'IP ' + esc(ip) : 'Port ' + esc(port);
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.className = 'sess-block-banner';
+    banner.id = 'sess-block-' + ky;
+    const lf = pnl.querySelector('.sess-logfile');
+    const hdr = pnl.querySelector('.sess-hdr');
+    if (lf) lf.before(banner); else if (hdr) hdr.after(banner); else pnl.prepend(banner);
+  }
+  banner.innerHTML =
+    '<span class="sbb-ico">⛔</span>' +
+    '<span class="sbb-txt">Netzwerk gesperrt: <b>' + was + '</b></span>' +
+    '<span class="sbb-hint">Eingehende Befehle werden von iptables verworfen und ' +
+    'nicht mehr ausgeführt. Mitgeschnittene Zeilen darunter sind nur noch ' +
+    'Paket-Wiederholungen (Raw-Socket-Ebene) – zum sofortigen Beenden „Kill PID“.</span>';
+}
+
+async function toggleBlock(remote, btype) {
+  const parts = remote.split(':');
+  const ip   = parts.slice(0, -1).join(':');
+  const port = parts[parts.length - 1];
+  const value = btype === 'ip' ? ip : port;
+  const key   = btype + ':' + value;
+  const isBlocked = !!_blockState[key];
+  const endpoint  = isBlocked ? '/api/unblock' : '/api/block';
+  try {
+    const r = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: btype, value})
+    });
+    const d = await r.json();
+    if (!d.ok) { alert('Fehler: ' + (d.msg || JSON.stringify(d))); return; }
+  } catch(e) {
+    alert('Fehler: ' + e);
+  }
+}
+
+function applyBlockState(blocks) {
+  _blockState = blocks || {};
+  Object.keys(sessions).forEach(remote => {
+    const ky = k(remote);
+    _updateBlockPanel(ky, remote);
+  });
+  _renderOverviewBlocks();
+}
+
+// Zeigt alle aktiven IP-/Port-Sperren in der Übersicht, jeweils mit Freigabe-Knopf.
+function _renderOverviewBlocks() {
+  const wrap = document.getElementById('ov-blocks');
+  const empty = document.getElementById('ov-blocks-empty');
+  const cnt = document.getElementById('ov-blk-cnt');
+  if (!wrap) return;
+  const keys = Object.keys(_blockState).filter(k2 => _blockState[k2]);
+  if (cnt) cnt.textContent = keys.length === 1 ? '1 Sperre' : keys.length + ' Sperren';
+  if (empty) empty.style.display = keys.length ? 'none' : '';
+  wrap.innerHTML = '';
+  keys.sort().forEach(key => {
+    const i = key.indexOf(':');
+    const btype = key.slice(0, i), value = key.slice(i + 1);
+    const istIp = btype === 'ip';
+    const el = document.createElement('div');
+    el.className = 'ov-blk';
+    el.innerHTML =
+      '<span class="ov-blk-ico">' + (istIp ? '🚫' : '🔌') + '</span>' +
+      '<span class="ov-blk-kind">' + (istIp ? 'IP' : 'PORT') + '</span>' +
+      '<span class="ov-blk-val">' + esc(value) + '</span>' +
+      '<button class="ov-blk-x" title="Sperre aufheben">Freigeben</button>';
+    el.querySelector('.ov-blk-x').addEventListener('click', async e => {
+      const b = e.currentTarget;
+      b.disabled = true; b.textContent = '⏳';
+      try {
+        const r = await fetch('/api/unblock', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({type: btype, value})
+        });
+        const j = await r.json();
+        if (!j.ok) { b.disabled = false; b.textContent = 'Freigeben'; alert('Fehler: ' + (j.msg || '')); }
+      } catch (err) { b.disabled = false; b.textContent = 'Freigeben'; }
+    });
+    wrap.appendChild(el);
+  });
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function k(s) { return String(s).replace(/[.:]/g,'_'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function clearFeed() { document.getElementById('feed').innerHTML=''; feedN=0; document.getElementById('fcnt').textContent='0 Events'; }
+
+// ── Gegenmaßnahmen-Button-Generator ────────────────────────────
+function buildCountermeasureBtns(msg, detail) {
+  const m = msg.toUpperCase();
+  const d = detail.toUpperCase();
+  const btns = [];
+  const btn = (label, action, param) =>
+    `<button class="cm-btn" data-action="${action}" data-param="${param||''}">${label}</button>`;
+
+  if (m.includes('ROOTKIT')) return '';
+
+  if (m.includes('IMPLANT')) {
+    const pidM = detail.match(/PID=(\d+)/);
+    if (pidM) btns.push(btn('⚡ Kill PID ' + pidM[1], 'kill_pid', pidM[1]));
+    return btns.join('');
+  }
+
+  if (m.includes('BIND SHELL') || m.includes('NEUER LISTENER')) {
+    const pidM = detail.match(/PID=(\d+)/);
+    if (pidM) btns.push(btn('☠ Kill PID ' + pidM[1], 'kill_pid', pidM[1]));
+  }
+
+  if (m.includes('PERSISTENCE')) {
+    const fileM = detail.match(/Datei:\s*(\S+)/);
+    if (fileM) {
+      btns.push(btn('🗑 Entfernen', 'remove_file', fileM[1]));
+      btns.push(btn('🔍 Anzeigen', 'show_file', fileM[1]));
+    }
+  }
+
+  if (m.includes('PRIVESC') && m.includes('SUID')) {
+    const fileM = detail.match(/Datei:\s*(\S+)/);
+    if (fileM) btns.push(btn('🔧 SUID entfernen', 'remove_suid', fileM[1]));
+  }
+
+  if (m.includes('WEBSHELL') || m.includes('CREDENTIAL ACCESS')) {
+    const pidM = detail.match(/PID=(\d+)/);
+    if (pidM) btns.push(btn('☠ Kill PID ' + pidM[1], 'kill_pid', pidM[1]));
+  }
+
+  return btns.join(' ');
+}
+
+// ── Netz-Isolierung ────────────────────────────────────────────
+let networkIsolated = false;
+async function toggleNetworkIsolation() {
+  const btn = document.getElementById('ni-btn');
+  const lbl = document.getElementById('ni-label');
+  btn.disabled = true;
+  lbl.textContent = '⏳';
+  try {
+    const action = networkIsolated ? 'restore_network' : 'isolate_network';
+    const r = await fetch('/api/countermeasure', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({action, param: ''})
+    });
+    const j = await r.json();
+    if (j.ok) {
+      networkIsolated = !networkIsolated;
+      btn.classList.toggle('on', networkIsolated);
+      const netInfo = j.network || j.iface || '';
+      _setNiUI(netInfo);
+    } else {
+      _setNiUI();
+      alert('Netzwerk-Umschaltung fehlgeschlagen:\n' + (j.msg || 'Unbekannter Fehler'));
+    }
+  } catch(e) {
+    _setNiUI();
+    alert('Netzwerkfehler: ' + e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+let _niNet = null;   // {allow, blocked, ifaces} – vom Backend geliefert
+
+function _setNiUI(netInfo) {
+  if (netInfo && typeof netInfo === 'object') _niNet = netInfo;
+  const btn = document.getElementById('ni-btn');
+  const lbl = document.getElementById('ni-label');
+  if (lbl) lbl.textContent = networkIsolated ? '🔓 Freigeben' : '🔒 Isolieren';
+
+  const allow = _niNet?.allow || '172.16.0.0/12';
+  const ifc   = _niNet?.ifaces ? ' · Container: ' + _niNet.ifaces : '';
+  if (btn) btn.title = networkIsolated
+    ? 'Netzwerk ISOLIERT – gesperrt ist alles ausser ' + allow + ' und lo' + ifc + ' – klicken zum Freigeben'
+    : 'Netzwerk FREI – klicken sperrt alles ausser ' + allow + ' und lo' + ifc;
+
+  _setProtState('ni', networkIsolated,
+    networkIsolated ? 'ISOLIERT' : 'NICHT ISOLIERT', 'st-iso', 'is-on-iso');
+
+  // Konkrete Adresse unter der Übersichts-Kachel
+  const netEl = document.getElementById('ov-ni-net');
+  if (netEl) netEl.textContent = networkIsolated
+    ? 'gesperrt: alles ausser ' + allow
+    : 'ausgehend frei · Ausnahme waere ' + allow;
+  document.getElementById('ov-ni-net')?.parentElement?.parentElement
+    ?.classList.toggle('is-iso', networkIsolated);
+
+  // Gleiche Angabe in der Schutz-Karte
+  const protNet = document.getElementById('prot-ni-net');
+  if (protNet) protNet.innerHTML = networkIsolated
+    ? 'Aktuell gesperrt: <b>alle ausgehenden Ziele ausser ' + esc(allow) + '</b> und Loopback.'
+      + (_niNet?.ifaces ? ' Container-Adresse: <b>' + esc(_niNet.ifaces) + '</b>' : '')
+    : 'Beim Isolieren gesperrt: <b>alle ausgehenden Ziele ausser ' + esc(allow) + '</b> und Loopback.'
+      + (_niNet?.ifaces ? ' Container-Adresse: <b>' + esc(_niNet.ifaces) + '</b>' : '');
+}
+
+// Start
+connect();
+checkRootkitState();
+</script>
+</body>
+</html>

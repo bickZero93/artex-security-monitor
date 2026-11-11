@@ -1,0 +1,17 @@
+# Laufzeit-/Log-Dateien (enthalten reale Session-Daten, IPs, Timestamps)
+*.log
+artex-monitor.log*
+dashboard-runtime.log
+
+# Backups & Scratch-Dateien aus der Entwicklung
+.backup-*/
+*.bak
+setup_*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor/Tooling
+.claude/
+.vscode/
