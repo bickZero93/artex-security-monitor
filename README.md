@@ -75,6 +75,20 @@ The monitor script is automatically copied into the container by `start-dashboar
 
 ---
 
+## Live Threat Detection
+
+### Aktive Bedrohungen – Bind Shell erkannt
+![Active Threats](screenshots/06_threats_active.png)
+
+The dashboard detects a `nc -lvnp 5555` bind shell listener inside the container, classifies it as **CRITICAL** (new listener) and **HIGH** (bind shell process), and offers a one-click "Prozess beenden (PID …)" countermeasure button.
+
+### Übersicht während aktiver Bedrohungen
+![Overview with Threats](screenshots/07_overview_active.png)
+
+The overview panel updates in real time — CRITICAL: 1, HIGH: 1 — and the "Letzte Ereignisse" feed shows the bind-shell events at the top.
+
+---
+
 ## Requirements
 
 **Host (where you run `start-dashboard.sh`):**
