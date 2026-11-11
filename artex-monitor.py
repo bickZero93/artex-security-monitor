@@ -206,6 +206,7 @@ class TunnelSniffer:
     def __init__(self):
         self.tracked   = {}  # (src,sp,dst,dp) → {'buf': bytearray, 'dir': str}
         self.tracked_remotes = set()  # (rem_ip, rem_port) → bei JEDEM lokalen Port tracken
+        self._dynamic_alerted = set()  # (rem_ip, rem_port) → bereits TUNNEL SESSION AKTIV gemeldet
         self.udp_active = {} # (remote_ip, remote_port, local_port) → Metadaten
         self.dns_hits   = collections.defaultdict(collections.deque)
         self.dns_domains = {} # Basisdomain → letzter verdächtiger Zeitpunkt
@@ -582,6 +583,7 @@ class TunnelSniffer:
             sport, dport, seq, flags, payload = tcp
             if not payload: continue
 
+            _new_dynamic = None  # (rem_ip, rem_port, local_port) – Alert außerhalb des Locks
             with self.lock:
                 # Dynamisches Tracking für bekannte Remote-Endpunkte: erfasst auch
                 # kurzlebige Connect-Senden-Schließen-Zyklen ab dem allerersten
@@ -594,6 +596,9 @@ class TunnelSniffer:
                                                    'remote': f'{src_ip}:{sport}',
                                                    'rem_ip': src_ip, 'rem_port': sport,
                                                    'local_port': dport}
+                            if (src_ip, sport) not in self._dynamic_alerted:
+                                self._dynamic_alerted.add((src_ip, sport))
+                                _new_dynamic = (src_ip, sport, dport)
                     elif (dst_ip, dport) in self.tracked_remotes:
                         k_out = ('0.0.0.0', sport, dst_ip, dport)
                         if k_out not in self.tracked:
@@ -601,6 +606,25 @@ class TunnelSniffer:
                                                     'remote': f'{dst_ip}:{dport}',
                                                     'rem_ip': dst_ip, 'rem_port': dport,
                                                     'local_port': sport}
+                            if (dst_ip, dport) not in self._dynamic_alerted:
+                                self._dynamic_alerted.add((dst_ip, dport))
+                                _new_dynamic = (dst_ip, dport, sport)
+
+            # Außerhalb des Locks: PID live ermitteln (die Verbindung ist JETZT,
+            # in diesem Moment, noch am Leben – nicht erst beim nächsten 1.5s-Scan)
+            # und sofort eine Session + Kill-Option im Dashboard anlegen, auch wenn
+            # der eigentliche Inhalt binär/verschlüsselt ist und nie als lesbarer
+            # Befehl erkannt wird.
+            if _new_dynamic:
+                _d_ip, _d_port, _d_local = _new_dynamic
+                _d_pid = self._owner_pid({'rem_ip': _d_ip, 'rem_port': _d_port,
+                                           'local_port': _d_local})
+                _d_scope = 'privat' if is_private(_d_ip) else 'öffentlich'
+                alert_fn('CRITICAL',
+                         f"TUNNEL SESSION AKTIV → {_d_ip}:{_d_port} [{_d_scope}]",
+                         f"PID={_d_pid}  Shell: (binär/verschlüsselt – Live-Erkennung)")
+
+            with self.lock:
                 for (r_ip, r_port, l_ip, l_port), info in list(self.tracked.items()):
                     if ((src_ip == r_ip and sport == r_port and dport == l_port) or
                         (dst_ip == r_ip and dport == r_port and sport == l_port)):
