@@ -1351,7 +1351,7 @@ function addAlert(ev, anim) {
     (cmBtns ? '<div class="arow-cm">' + cmBtns + '</div>' : '');
 
   feed.appendChild(row);
-  if (THREAT_MSGS.test(msg)) addThreat(ev);
+  if (THREAT_MSGS.test(msg) && sev !== 'INFO' && sev !== 'LOW') addThreat(ev);
   _wireInlineCm(row);
   feedN++;
   if (sev !== 'HTTP') _pushOverviewRecent(ev);
