@@ -384,6 +384,10 @@ def _do_kill(remote: str, pid: str | None = None,
                 owners = [pid]
         else:
             owners = _socket_pid_map().get(remote, [])
+            # Fallback: gespeicherte PID nutzen wenn kein aktiver Socket
+            # (C2-Beacons nutzen kurzlebige Verbindungen — Socket oft schon zu)
+            if not owners and pid and pid != '?':
+                owners = [pid]
         if not owners:
             return {'ok': True, 'pid': str(pid or '?'), 'pids': [], 'results': [],
                     'outcome': 'already_closed', 'msg': 'Verbindung bereits beendet'}
