@@ -613,16 +613,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13
 .tl-ts{color:var(--dim);font-size:10px;min-width:68px;flex-shrink:0}
 .tl-dir{min-width:20px;font-weight:700;flex-shrink:0}
 .tl-data{word-break:break-all;flex:1}
-.tl.cmd    .tl-dir{color:var(--crit)}      .tl.cmd    .tl-data{color:#ffb3b0}
-.tl.out    .tl-dir{color:var(--low)}       .tl.out    .tl-data{color:#a8f0b0}
+/* Befehl (Angreifer → Shell) */
+.tl.cmd{background:linear-gradient(90deg,#f8514914,transparent 88%);border-left:3px solid #f85149;padding:3px 8px 3px 7px;margin-bottom:1px}
+.tl.cmd    .tl-dir{color:#f85149;font-size:13px;font-weight:900} .tl.cmd    .tl-data{color:#ffa198;font-weight:600}
+/* Ausgabe (Shell → Angreifer) */
+.tl.out{margin-left:24px;padding:2px 8px 2px 10px;border-left:2px solid #3fb95040}
+.tl.out    .tl-dir{color:#3fb950;opacity:.5;font-size:11px}      .tl.out    .tl-data{color:#8b949e}
 .tl.prompt .tl-dir{color:var(--sess)}      .tl.prompt .tl-data{color:#d8b4fe}
 .tl.marker .tl-dir{color:var(--high)}      .tl.marker .tl-data{color:var(--high)}
-.tl.sens   .tl-dir{color:var(--crit)}      .tl.sens   .tl-data{color:var(--crit);font-weight:600}
+.tl.sens{margin-left:24px;padding:2px 8px 2px 10px;border-left:2px solid #f8514966;background:#f8514908}
+.tl.sens   .tl-dir{color:var(--crit);font-size:11px}             .tl.sens   .tl-data{color:var(--crit);font-weight:600}
 .tl.http   .tl-dir{color:var(--info)}       .tl.http   .tl-data{color:#93c5fd}
 .tl.dnsq   .tl-dir{color:#58a6ff}           .tl.dnsq   .tl-data{color:#93c5fd}
 .tl.dnsr   .tl-dir{color:#d2a8ff}           .tl.dnsr   .tl-data{color:#d8b4fe}
-.tl.out,.tl.sens{margin-left:22px;padding-left:10px;border-left:2px solid #3fb95045}
-.tl.sens{border-left-color:#f8514966;background:#f8514908}
+/* Prompt-Teil und Command-Teil innerhalb einer Zeile */
+.tl-prompt-part{color:#6e7681;font-weight:400;margin-right:4px}
+.tl-cmd-part{color:#ffa198;font-weight:700}
 
 /* Shell-Gruppen */
 .shell-group{
@@ -2137,14 +2143,45 @@ function termLine(remote, dir, data, ts, anim, eventPid) {
 
   function _isOutput(d) {
     return (
-      /^\w+:x:\d+:\d+:/.test(d)             ||
-      /^[d-][rwx-]{9}\s+\d+\s+\w+/.test(d) ||
-      /^total \d+$/.test(d)                 ||
-      /^uid=\d+\(/.test(d)                  ||
-      /^[-\w]+\s+\d+\s+[\w-]+\s+[\w-]+\s+\d+\s+\w+\s+\d+/.test(d) ||
-      /^\s*\d+ \d{4}-\d{2}-\d{2}/.test(d)  ||
-      (/^\/[a-z]/.test(d) && !/^\/dev\/tcp/.test(d))
+      /^\w+:x:\d+:\d+:/.test(d)             ||  // /etc/passwd
+      /^[d-][rwx-]{9}\s+\d+\s+\w+/.test(d) ||  // ls -l
+      /^total \d+$/.test(d)                 ||  // ls total
+      /^uid=\d+\(/.test(d)                  ||  // id
+      /^[-\w]+\s+\d+\s+[\w-]+\s+[\w-]+\s+\d+\s+\w+\s+\d+/.test(d) || // ps aux
+      /^\s*\d+ \d{4}-\d{2}-\d{2}/.test(d)  ||  // date
+      /^Linux\s+\S+\s+[\d.]+/.test(d)       ||  // uname -a
+      /^[0-9a-f]{12}$/.test(d)             ||  // container hostname (12 hex chars)
+      (/^\/[a-z]/.test(d) && !/^\/dev\/tcp/.test(d)) // path output
     );
+  }
+
+  // Erkennung: Prompt+Befehl in einer Zeile (z.B. "root@host:/app# whoami")
+  const rawPromptCmd = !dnsCommand && !kpdgWrapped && !kpdgLegacy &&
+    data.match(/^([\w.@-]+:[^\n#$]*)[#$]\s+(.+)$/);
+  if (rawPromptCmd) {
+    ps.commandOpen = true;
+    ps.cwd = rawPromptCmd[1];
+    ps.lastCmd = rawPromptCmd[2].trim();
+    const row = document.createElement('div');
+    row.className = 'tl cmd';
+    if (!anim) row.style.animation = 'none';
+    row.innerHTML =
+      '<span class="tl-ts">' + esc(ts||'') + '</span>' +
+      '<span class="tl-dir">$</span>' +
+      '<span class="tl-data"><span class="tl-prompt-part">' + esc(rawPromptCmd[1]) + '#</span>' +
+      ' <span class="tl-cmd-part">' + esc(rawPromptCmd[2]) + '</span></span>';
+    target.appendChild(row);
+    if (!s.ended) { s.cntIn++; const el=document.getElementById('si-'+ky); if(el) el.textContent=s.cntIn; }
+    const asBox2 = document.getElementById('sas-' + ky);
+    if (asBox2 && asBox2.checked) term.scrollTop = term.scrollHeight;
+    while (term.children.length > MAX_TERM) term.removeChild(term.firstChild);
+    return;
+  }
+
+  // Terminal-Echo unterdrücken: gleiche Zeile wie letzter gesendeter Befehl
+  if (ps.lastCmd && data.trim() === ps.lastCmd) {
+    ps.lastCmd = null;
+    return;
   }
 
   const isInDir  = dir && (dir.includes('←') || dir.toUpperCase().includes('IN'));
@@ -2156,16 +2193,18 @@ function termLine(remote, dir, data, ts, anim, eventPid) {
                      (dir.includes('←') || dir.toUpperCase().includes('IN'));
   const isOutput = !isPrompt && (ps.commandOpen || _isOutput(data));
 
+  if (isPrompt) ps.commandOpen = false;
+
   let cls, sym;
   if (s.ended)       { cls = 'ended';  sym = '·'; }
   else if (isDnsQuery) { cls = 'dnsq'; sym = '⇢'; }
   else if (isDnsReply) { cls = 'dnsr'; sym = '⇠'; }
   else if (isPrompt) { cls = 'prompt'; sym = '$'; }
-  else if (isSens)   { cls = 'sens';   sym = '⚠'; }
+  else if (isSens)   { cls = 'sens';   sym = '↳'; }
   else if (isHttp)   { cls = 'http';   sym = '⌁'; }
-  else if (isOutput) { cls = 'out';    sym = '←'; }
-  else if (isInDir)  { cls = 'cmd';    sym = '→'; }
-  else               { cls = 'out';    sym = '←'; }
+  else if (isOutput) { cls = 'out';    sym = '·'; }
+  else if (isInDir)  { cls = 'cmd';    sym = '$'; }
+  else               { cls = 'out';    sym = '·'; }
 
   const row = document.createElement('div');
   row.className = 'tl ' + cls;

@@ -118,6 +118,16 @@ The overview panel updates in real time — CRITICAL: 6, HIGH: 9 — with the la
 
 The Monitor-Modus shows the raw event stream with severity badges, timestamps, and inline Kill buttons. Every event type — TUNNEL SESSION, BIND SHELL, RCE, CONTAINER ESCAPE — is captured and classified in real time.
 
+### Reverse Shell Session mit Befehlshistorie
+![Active Reverse Shell Session](screenshots/FINAL01_sessions_with_commands.png)
+
+The Sessions tab shows a live reverse shell from `172.18.0.1:9001` with 29 captured commands. Each attacker command (`$ root@host:/app# whoami`) is highlighted in red with the prompt dimmed — shell output (`·`) is muted gray and indented, sensitive data (`↳ uid=0(root)…`) in red. Echo lines are suppressed automatically.
+
+### Erkannte Bedrohungen: Reverse Shell + Tunnel Session
+![Threats from Reverse Shell](screenshots/FINAL02_threats_reverse_shell.png)
+
+4 simultaneous threat cards: **REVERSE SHELL – bash -i** (CRITICAL), **TUNNEL SESSION AKTIV** with PID 942, and multiple **TUNNEL SHELL PROMPT** events capturing each attacker command as it was typed.
+
 ### Einzelne Bind Shell erkannt (Basis-Szenario)
 ![Active Threats](screenshots/06_threats_active.png)
 
