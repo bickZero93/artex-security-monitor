@@ -114,6 +114,9 @@ autokill_enabled = False   # Autokill: alle erkannten Reverse-Shell-PIDs sofort 
 auto_neutralize  = False   # Auto-Neutralize: Rootkits automatisch entfernen
 _rootkit_correlations: dict = {}  # rk_id → [session remotes]
 _pending_implant_pids: set  = set()  # implant PIDs ohne Session – warten auf NEUE VERBINDUNG
+_pending_implant_names: set = set()  # getarnte Prozessnamen (z.B. sd-pam) – deckt den Fall ab
+                                      # dass der Implant-Alert eine ANDERE PID meldet als die,
+                                      # die den eigentlichen TCP-Socket hält (Loader/Watchdog-Paar)
 _event_id    = 0
 _active_blocks: dict = {}  # key: 'ip:1.2.3.4' oder 'port:53' → True
 _blocks_lock = threading.Lock()
@@ -1339,22 +1342,33 @@ def _run_once() -> None:
                                             _ak_udp_port = udp_m.group(1) if udp_m else None
 
                                 # IMPLANT: PID steht im Detail, nicht in der Meldung.
-                                # Socket-Lookup nach dem Lock vormerken + PID für spätere
-                                # NEUE VERBINDUNG-Zuordnung merken (Watchdog→Worker-Lücke).
+                                # Socket-Lookup nach dem Lock vormerken + PID/Name für
+                                # spätere NEUE VERBINDUNG-Zuordnung merken. Name zusätzlich
+                                # zur PID, weil Loader/Watchdog-Paare oft unter einer ANDEREN
+                                # PID laufen als der, die als "deleted binary" auffiel.
                                 if 'IMPLANT' in smsg:
                                     pid_m_impl = _PID_D.search(ev['detail'])
+                                    name_m_impl = re.search(r'name=(\S+)', ev['detail'])
                                     if pid_m_impl:
                                         _impl_pid_str = pid_m_impl.group(1)
                                         if not any(not s.get('ended') for s in sessions.values()):
                                             _impl_lookup_pid = _impl_pid_str
                                         _pending_implant_pids.add(_impl_pid_str)
+                                    if name_m_impl:
+                                        _pending_implant_names.add(name_m_impl.group(1))
 
-                                # NEUE VERBINDUNG: wenn PID zu einem bekannten Implant
-                                # gehört, synthetische Session direkt aus dem
-                                # Verbindungs-Event bauen (kein docker exec nötig).
-                                if 'NEUE VERBINDUNG' in smsg and _pending_implant_pids:
-                                    pid_m_nv = _PID_D.search(ev['detail'])
-                                    if pid_m_nv and pid_m_nv.group(1) in _pending_implant_pids:
+                                # NEUE VERBINDUNG: wenn PID ODER Prozessname (CMD=(...))
+                                # zu einem bekannten Implant gehört, synthetische Session
+                                # direkt aus dem Verbindungs-Event bauen (kein docker exec).
+                                if ('NEUE VERBINDUNG' in smsg and
+                                        (_pending_implant_pids or _pending_implant_names)):
+                                    pid_m_nv  = _PID_D.search(ev['detail'])
+                                    name_m_nv = re.search(r'CMD=\(([^)]+)\)', ev['detail'])
+                                    _nv_pid_match  = bool(pid_m_nv and
+                                        pid_m_nv.group(1) in _pending_implant_pids)
+                                    _nv_name_match = bool(name_m_nv and
+                                        name_m_nv.group(1) in _pending_implant_names)
+                                    if pid_m_nv and (_nv_pid_match or _nv_name_match):
                                         ip_m_nv = _IP_D.search(smsg)
                                         if ip_m_nv:
                                             _nv_remote = ip_m_nv.group(1)
@@ -1382,6 +1396,8 @@ def _run_once() -> None:
                                                     'stats': copy.copy(stats),
                                                     'sessions': len(sessions)}
                                             _pending_implant_pids.discard(_nv_pid)
+                                            if name_m_nv:
+                                                _pending_implant_names.discard(name_m_nv.group(1))
                                 break
 
                     # Broadcasts AUSSERHALB des Locks (kein Deadlock)
