@@ -113,6 +113,7 @@ monitor_status = {'running': False, 'started': None, 'privileged': False}
 autokill_enabled = False   # Autokill: alle erkannten Reverse-Shell-PIDs sofort beenden
 auto_neutralize  = False   # Auto-Neutralize: Rootkits automatisch entfernen
 _rootkit_correlations: dict = {}  # rk_id → [session remotes]
+_pending_implant_pids: set  = set()  # implant PIDs ohne Session – warten auf NEUE VERBINDUNG
 _event_id    = 0
 _active_blocks: dict = {}  # key: 'ip:1.2.3.4' oder 'port:53' → True
 _blocks_lock = threading.Lock()
@@ -897,6 +898,10 @@ def process_event(ev: dict) -> None:
                                           'pid': sessions[remote].get('pid')})
                     to_broadcast.append({'type': 'stats', 'stats': copy.copy(stats),
                                           'sessions': len(sessions)})
+                    # Echte Session erkannt → Implant-PID aus pending entfernen
+                    pid_val = sessions[remote].get('pid')
+                    if pid_val:
+                        _pending_implant_pids.discard(pid_val)
             elif any(k in msg for k in _SESS_END):
                 m = _IP_RE.search(msg)
                 if m:
@@ -981,11 +986,42 @@ def process_event(ev: dict) -> None:
                             to_broadcast.append({'type': 'session_pid',
                                                   'remote': r2, 'pid': pid_m2.group(1)})
                     # IMPLANT: PID steht im Detail, nicht in der Meldung.
-                    # Wenn keine aktive Session bekannt ist, PID für Socket-Lookup merken.
+                    # Sofort Socket-Lookup versuchen; PID zusätzlich in
+                    # _pending_implant_pids merken falls NEUE VERBINDUNG später kommt.
                     if 'IMPLANT' in last_msg:
                         _pid_m_impl = _PID_RE.search(ev['detail'])
-                        if _pid_m_impl and not any(not s.get('ended') for s in sessions.values()):
-                            _implant_no_session_pid = _pid_m_impl.group(1)
+                        if _pid_m_impl:
+                            _impl_pid_str = _pid_m_impl.group(1)
+                            if not any(not s.get('ended') for s in sessions.values()):
+                                _implant_no_session_pid = _impl_pid_str
+                            _pending_implant_pids.add(_impl_pid_str)
+
+                    # NEUE VERBINDUNG: wenn PID zu einem bekannten Implant gehört,
+                    # synthetische Session aus dem Verbindungs-Event bauen (kein docker exec).
+                    if 'NEUE VERBINDUNG' in last_msg and _pending_implant_pids:
+                        _pid_m_nv = _PID_RE.search(ev['detail'])
+                        if _pid_m_nv and _pid_m_nv.group(1) in _pending_implant_pids:
+                            _ip_m_nv = _IP_RE2.search(last_msg)
+                            if _ip_m_nv:
+                                _nv_remote = _ip_m_nv.group(1)
+                                _nv_pid    = _pid_m_nv.group(1)
+                                if _nv_remote not in sessions or sessions[_nv_remote].get('ended'):
+                                    _nv_ts = last.get('ts', datetime.now().strftime('%H:%M:%S'))
+                                    sessions[_nv_remote] = {
+                                        'remote':  _nv_remote, 'started': _nv_ts,
+                                        'ended':   None, 'cmds': [], 'logfile': '',
+                                        'pid':     _nv_pid, 'pids': [_nv_pid],
+                                    }
+                                    stats['SESSION'] = stats.get('SESSION', 0) + 1
+                                    to_broadcast.append({'type': 'session_open',
+                                                          'remote': _nv_remote,
+                                                          'started': _nv_ts,
+                                                          'pid': _nv_pid,
+                                                          'synthetic': True})
+                                    to_broadcast.append({'type': 'stats',
+                                                          'stats': copy.copy(stats),
+                                                          'sessions': len(sessions)})
+                                    _pending_implant_pids.discard(_nv_pid)
 
                     _TUNNEL_KW = ('TUNNEL CMD', 'TUNNEL INHALT', 'TUNNEL REQUEST',
                                   'TUNNEL SENSITIVE', 'TUNNEL SHELL', 'TUNNEL SHELL PROMPT')
