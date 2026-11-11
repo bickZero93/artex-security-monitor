@@ -1370,6 +1370,16 @@ function threatKey(msg, detail) {
   if (/BIND SHELL|NEUER LISTENER/.test(msg)) {
     const p = msg.match(/:(\d+)/); return p ? 'bindshell_' + p[1] : 'bindshell';
   }
+  if (/TUNNEL SESSION|TUNNEL SHELL|TUNNEL CMD|TUNNEL CREDENTIALS|TUNNEL SENSITIVE/i.test(msg)) {
+    // Schlüssel = Remote-IP:Port aus der Meldung (z.B. "→ 87.79.91.7:2087")
+    const r = msg.match(/→\s*([\d.]+:\d+)/); return r ? 'tunnel_' + r[1].replace(/[.:]/g,'_') : 'tunnel_0';
+  }
+  if (/REVERSE SHELL|SHELL UPGRADE|UDP REVERSE SHELL/i.test(msg)) {
+    // Schlüssel = PID (aus Detail) oder Kurzlabel aus Meldung
+    const p = d.match(/PID=(\d+)/);
+    const lbl = msg.replace(/^REVERSE SHELL\s*[-–]\s*/i,'').replace(/\s+/g,'_').substring(0,30);
+    return p ? 'rshell_' + p[1] : 'rshell_' + lbl;
+  }
   if (/ANTI-MONITOR/.test(msg)) return 'anti_monitor';
   if (/CONTAINER ESCAPE/.test(msg)) return 'container_escape';
   if (/EXFIL/.test(msg)) return 'exfil';
@@ -1377,6 +1387,7 @@ function threatKey(msg, detail) {
   if (/IMPLANT.*WORKER/.test(msg))   { const p = d.match(/PID=(\d+)/); return 'implant_wk_' + (p ? p[1] : '0'); }
   if (/IMPLANT.*DNS/.test(msg))      { const p = d.match(/PID=(\d+)/); return 'implant_dns_' + (p ? p[1] : '0'); }
   if (/IMPLANT/.test(msg))           { const p = d.match(/PID=(\d+)/); return 'implant_' + (p ? p[1] : '0'); }
+  if (/BACKDOOR/i.test(msg))         { const p = d.match(/PID=(\d+)/); return 'backdoor_' + (p ? p[1] : '0'); }
   if (/FILE INTEGRITY/.test(msg))  { const p = d.match(/\|?\s*(\S+)$/); return 'fi_' + (p ? p[1].replace(/\W/g,'_') : '0'); }
   if (/PERSISTENCE/.test(msg))     { const p = d.match(/Datei:\s*(\S+)/); return 'persist_' + (p ? p[1].replace(/\W/g,'_') : '0'); }
   if (/WEBSHELL/.test(msg))        { const p = d.match(/PID=(\d+)/); return 'webshell_' + (p ? p[1] : '0'); }
@@ -1689,7 +1700,8 @@ function _patchThreatAction(msg, det) {
   if (!html) return;
   // Die Karte wurde ohne Detail angelegt und trägt deshalb den Fallback-Key.
   const entry = threatCards.get(threatKey(msg, '')) || threatCards.get(threatKey(msg, det));
-  if (!entry || entry.resolved || entry.actionHtml) return;
+  if (!entry || entry.resolved) return;
+  if (entry.actionHtml && entry.el.querySelector('.tcard-action')) return; // Button bereits sichtbar
   entry.actionHtml = html;
   const hdr = entry.el.querySelector('.tcard-hdr');
   let actEl = entry.el.querySelector('.tcard-actions');
