@@ -1070,7 +1070,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13
 let es = null, feedN = 0, activeTab = 'overview';
 let filters = new Set(['CRITICAL','HIGH','MEDIUM','LOW','INFO','SESSION']);
 let sessions = {}, sessionTabs = new Set();
-const THREAT_MSGS = /ROOTKIT|BIND SHELL|NEUER LISTENER|ANTI-MONITOR|CONTAINER ESCAPE|BACKDOOR|EXFIL|IMPLANT|FILE INTEGRITY|PERSISTENCE|WEBSHELL|CREDENTIAL ACCESS|PRIVESC.*SUID/i;
+const THREAT_MSGS = /ROOTKIT|BIND SHELL|NEUER LISTENER|REVERSE SHELL|TUNNEL SESSION|TUNNEL SHELL|TUNNEL CMD|TUNNEL CREDENTIALS|TUNNEL SENSITIVE|TUNNEL REQUEST|TUNNEL VERD|SHELL UPGRADE|UDP REVERSE SHELL|ANTI-MONITOR|CONTAINER ESCAPE|BACKDOOR|EXFIL|IMPLANT|FILE INTEGRITY|PERSISTENCE|WEBSHELL|CREDENTIAL ACCESS|PRIVESC.*SUID/i;
 const threatCards = new Map();
 let threatN = 0;
 const MAX_FEED = 500, MAX_TERM = 1200;
@@ -1400,6 +1400,9 @@ function _buildThreatAction(rawMsg, detail) {
     return `<button class="tcard-action" data-action="remove_rootkit" data-param="${esc(fileRef)}">🔥 Rootkit vollständig entfernen</button>`;
   }
   if (/BIND SHELL|NEUER LISTENER/i.test(rawMsg)) { const m = pid(); return m ? killBtn(m) : ''; }
+  if (/REVERSE SHELL|SHELL UPGRADE|UDP REVERSE SHELL/i.test(rawMsg)) { const m = pid(); return m ? killBtn(m) : `<button class="tcard-action" data-action="isolate_network">🔒 Netzwerk isolieren</button>`; }
+  if (/TUNNEL SESSION|TUNNEL SHELL|TUNNEL CMD|TUNNEL CREDENTIALS|TUNNEL SENSITIVE/i.test(rawMsg)) { const m = pid(); return m ? killBtn(m) : `<button class="tcard-action" data-action="isolate_network">🔒 Netzwerk isolieren</button>`; }
+  if (/IMPLANT|CONTAINER ESCAPE|BACKDOOR/i.test(rawMsg)) { const m = pid(); return m ? killBtn(m) : ''; }
   if (/ANTI-MONITOR|EXFIL/.test(rawMsg))
     return `<button class="tcard-action" data-action="isolate_network">🔒 Netzwerk isolieren</button>`;
   if (/PERSISTENCE/.test(rawMsg)) {
