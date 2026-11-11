@@ -176,8 +176,8 @@ print(json.dumps({remote: sorted(pids) for remote, pids in out.items()}))
 
 
 def _implant_pid_remote(pid: str) -> str | None:
-    """Findet den ESTABLISHED TCP-Remote-Endpunkt für eine gegebene PID.
-    Gibt None zurück wenn die PID keine externe TCP-Verbindung hält."""
+    """Findet den ESTABLISHED TCP-Remote-Endpunkt für eine gegebene PID
+    oder deren direkte Kindprozesse (Watchdog → Worker / Loader → Shell)."""
     probe = r'''
 import json, os, re, socket, sys
 target_pid = sys.argv[1]
@@ -198,19 +198,40 @@ for path in ('/proc/net/tcp', '/proc/net/tcp6'):
                     pass
     except FileNotFoundError:
         pass
-result = None
-try:
-    for fd in os.listdir('/proc/' + target_pid + '/fd'):
-        try:
-            link = os.readlink('/proc/' + target_pid + '/fd/' + fd)
-            m = re.fullmatch(r'socket:\[(\d+)\]', link)
-            if m and m.group(1) in inode_remote:
-                result = inode_remote[m.group(1)]
+
+def pid_remote(p):
+    try:
+        for fd in os.listdir('/proc/' + p + '/fd'):
+            try:
+                link = os.readlink('/proc/' + p + '/fd/' + fd)
+                m = re.fullmatch(r'socket:\[(\d+)\]', link)
+                if m and m.group(1) in inode_remote:
+                    return inode_remote[m.group(1)]
+            except (FileNotFoundError, PermissionError, OSError):
+                pass
+    except (FileNotFoundError, PermissionError, OSError):
+        pass
+    return None
+
+result = pid_remote(target_pid)
+if not result:
+    # Kindprozesse prüfen (Loader → bash -i, Watchdog → Worker)
+    try:
+        for child in os.listdir('/proc'):
+            if not child.isdigit():
+                continue
+            try:
+                with open('/proc/' + child + '/status') as f:
+                    for line in f:
+                        if line.startswith('PPid:') and line.split()[1] == target_pid:
+                            result = pid_remote(child)
+                            break
+            except (FileNotFoundError, OSError):
+                pass
+            if result:
                 break
-        except (FileNotFoundError, PermissionError, OSError):
-            pass
-except (FileNotFoundError, PermissionError, OSError):
-    pass
+    except (FileNotFoundError, OSError):
+        pass
 print(json.dumps(result))
 '''
     try:
@@ -959,6 +980,13 @@ def process_event(ev: dict) -> None:
                             if pid_m2.group(1) not in sessions[r2].setdefault('pids', []): sessions[r2]['pids'].append(pid_m2.group(1))
                             to_broadcast.append({'type': 'session_pid',
                                                   'remote': r2, 'pid': pid_m2.group(1)})
+                    # IMPLANT: PID steht im Detail, nicht in der Meldung.
+                    # Wenn keine aktive Session bekannt ist, PID für Socket-Lookup merken.
+                    if 'IMPLANT' in last_msg:
+                        _pid_m_impl = _PID_RE.search(ev['detail'])
+                        if _pid_m_impl and not any(not s.get('ended') for s in sessions.values()):
+                            _implant_no_session_pid = _pid_m_impl.group(1)
+
                     _TUNNEL_KW = ('TUNNEL CMD', 'TUNNEL INHALT', 'TUNNEL REQUEST',
                                   'TUNNEL SENSITIVE', 'TUNNEL SHELL', 'TUNNEL SHELL PROMPT')
                     if any(k in last_msg for k in _TUNNEL_KW):
