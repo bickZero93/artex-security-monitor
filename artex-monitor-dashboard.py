@@ -175,6 +175,56 @@ print(json.dumps({remote: sorted(pids) for remote, pids in out.items()}))
     return {remote: [str(pid) for pid in pids] for remote, pids in raw.items()}
 
 
+def _implant_pid_remote(pid: str) -> str | None:
+    """Findet den ESTABLISHED TCP-Remote-Endpunkt für eine gegebene PID.
+    Gibt None zurück wenn die PID keine externe TCP-Verbindung hält."""
+    probe = r'''
+import json, os, re, socket, sys
+target_pid = sys.argv[1]
+inode_remote = {}
+for path in ('/proc/net/tcp', '/proc/net/tcp6'):
+    try:
+        with open(path) as f:
+            for line in list(f)[1:]:
+                p = line.split()
+                if len(p) < 10 or p[3] != '01':
+                    continue
+                rh, rp = p[2].split(':')
+                try:
+                    if len(rh) == 8:
+                        remote = socket.inet_ntoa(bytes.fromhex(rh)[::-1]) + ':' + str(int(rp, 16))
+                        inode_remote[p[9]] = remote
+                except Exception:
+                    pass
+    except FileNotFoundError:
+        pass
+result = None
+try:
+    for fd in os.listdir('/proc/' + target_pid + '/fd'):
+        try:
+            link = os.readlink('/proc/' + target_pid + '/fd/' + fd)
+            m = re.fullmatch(r'socket:\[(\d+)\]', link)
+            if m and m.group(1) in inode_remote:
+                result = inode_remote[m.group(1)]
+                break
+        except (FileNotFoundError, PermissionError, OSError):
+            pass
+except (FileNotFoundError, PermissionError, OSError):
+    pass
+print(json.dumps(result))
+'''
+    try:
+        r = subprocess.run(
+            ['docker', 'exec', CONTAINER, 'python3', '-c', probe, str(pid)],
+            capture_output=True, text=True, timeout=5
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return json.loads(r.stdout.strip()) or None
+    except Exception:
+        pass
+    return None
+
+
 def _udp_local_owners(local_port: int | str) -> list[str]:
     """Liefert nur Prozesse, die aktuell den angegebenen UDP-Port besitzen."""
     probe = r'''
@@ -692,6 +742,7 @@ def process_event(ev: dict) -> None:
     _should_auto_neutralize = False
     _rk_param = ''
     _impl_kill_pid = ''
+    _implant_no_session_pid = ''  # gesetzt wenn IMPLANT ohne passende aktive Session
 
     with _state_lock:
         t = ev['type']
@@ -780,6 +831,13 @@ def process_event(ev: dict) -> None:
                 # Watchdog/Worker nach dem Entfernen der Rootkit-Datei aktiv.
                 if auto_neutralize and _impl_ev and _impl_ev.get('pid'):
                     _impl_kill_pid = _impl_ev['pid']
+                # Wenn keine aktive Session bekannt ist (TUNNEL SESSION AKTIV
+                # wurde verpasst oder nie gesendet), PID für Socket-Lookup merken.
+                if _impl_ev and _impl_ev.get('pid'):
+                    _active_in_ev = [s for s in _impl_ev.get('sessions', [])
+                                     if not s.get('ended')]
+                    if not _active_in_ev:
+                        _implant_no_session_pid = _impl_ev['pid']
 
             # Session-Start direkt aus dem Alert extrahieren (kein Banner nötig)
             _SESS_START = ('TUNNEL SESSION AKTIV', 'REVERSE SHELL SESSION ERKANNT')
@@ -1047,6 +1105,39 @@ def process_event(ev: dict) -> None:
                    'ok': _ik_result.get('ok', False),
                    'msg': _ik_result.get('msg', ''),
                    'ts': _container_ts()})
+
+    # Synthethische Session: IMPLANT ohne TUNNEL SESSION AKTIV
+    # Passiert wenn die Shell als Implant-Prozess erkannt wurde, bevor das
+    # Netzwerk-Tracking die TCP-Verbindung als Session registriert hat.
+    if _implant_no_session_pid:
+        try:
+            _syn_remote = _implant_pid_remote(_implant_no_session_pid)
+            if _syn_remote:
+                _do_syn = False
+                _syn_ts = _container_ts()
+                _syn_stats = None
+                with _state_lock:
+                    if _syn_remote not in sessions or sessions[_syn_remote].get('ended'):
+                        sessions[_syn_remote] = {
+                            'remote':  _syn_remote,
+                            'started': _syn_ts,
+                            'ended':   None, 'cmds': [], 'logfile': '',
+                            'pid':     _implant_no_session_pid,
+                            'pids':    [_implant_no_session_pid],
+                        }
+                        stats['SESSION'] = stats.get('SESSION', 0) + 1
+                        _syn_stats = copy.copy(stats)
+                        _do_syn = True
+                if _do_syn:
+                    broadcast({'type': 'session_open', 'remote': _syn_remote,
+                                'started': _syn_ts, 'pid': _implant_no_session_pid,
+                                'synthetic': True})
+                    broadcast({'type': 'stats', 'stats': _syn_stats,
+                                'sessions': len(sessions)})
+                    print(f'[IMPLANT-SYN] Synthetische Session {_syn_remote}'
+                          f' (PID {_implant_no_session_pid})', flush=True)
+        except Exception as _e:
+            print(f'[IMPLANT-SYN] Fehler: {_e}', flush=True)
 
 # ── Monitor Subprocess ──────────────────────────────────────────────────
 def _check_privileged() -> bool:
