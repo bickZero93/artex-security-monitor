@@ -2661,6 +2661,15 @@ function handleCountermeasureApplied(ev) {
   if (ev.action === 'remove_file' && param) _markCmDone('show_file', param);
   // Ein beendeter Prozess ist auch nicht mehr zu beenden.
   if (ev.action === 'kill_pid' && param) _markCmDone('kill_pid', param);
+  // Netzwerk-Isolierung: Zustand aus dem SSE-Event synchonisieren (auch für andere offene Tabs).
+  if (ev.action === 'isolate_network') {
+    networkIsolated = true;
+    _setNiUI(ev.network || {});
+  }
+  if (ev.action === 'restore_network') {
+    networkIsolated = false;
+    _setNiUI(ev.network || {});
+  }
 }
 
 function _markCmDone(action, param) {
@@ -2874,7 +2883,10 @@ async function toggleNetworkIsolation() {
     });
     const j = await r.json();
     if (j.ok) {
-      networkIsolated = !networkIsolated;
+      // Zustand deterministisch aus der Aktion ableiten statt zu toggeln;
+      // vermeidet Doppel-Toggle falls ein SSE-Event die Änderung bereits
+      // vorher übermittelt hat.
+      networkIsolated = (action === 'isolate_network');
       btn.classList.toggle('on', networkIsolated);
       const netInfo = j.network || j.iface || '';
       _setNiUI(netInfo);
@@ -2893,7 +2905,12 @@ async function toggleNetworkIsolation() {
 let _niNet = null;   // {allow, blocked, ifaces} – vom Backend geliefert
 
 function _setNiUI(netInfo) {
-  if (netInfo && typeof netInfo === 'object') _niNet = netInfo;
+  if (netInfo && typeof netInfo === 'object') {
+    _niNet = netInfo;
+    // Isolierungs-Zustand aus Backend wiederherstellen (wird nach F5 / SSE-Reconnect
+    // aus /api/network_info geladen und synchronisiert andere offene Tabs).
+    if (netInfo.isolated !== undefined) networkIsolated = netInfo.isolated;
+  }
   const btn = document.getElementById('ni-btn');
   const lbl = document.getElementById('ni-label');
   if (lbl) lbl.textContent = networkIsolated ? '🔓 Freigeben' : '🔒 Isolieren';
@@ -2911,7 +2928,7 @@ function _setNiUI(netInfo) {
   const netEl = document.getElementById('ov-ni-net');
   if (netEl) netEl.textContent = networkIsolated
     ? 'gesperrt: alles ausser ' + allow
-    : 'ausgehend frei · Ausnahme waere ' + allow;
+    : 'ausgehend frei · Ausnahme wäre ' + allow;
   document.getElementById('ov-ni-net')?.parentElement?.parentElement
     ?.classList.toggle('is-iso', networkIsolated);
 

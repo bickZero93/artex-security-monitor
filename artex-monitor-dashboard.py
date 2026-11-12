@@ -120,6 +120,7 @@ _pending_implant_names: set = set()  # getarnte Prozessnamen (z.B. sd-pam) – d
 _event_id    = 0
 _active_blocks: dict = {}  # key: 'ip:1.2.3.4' oder 'port:53' → True
 _blocks_lock = threading.Lock()
+_network_isolated: bool = False   # True solange iptables OUTPUT-Policy auf DROP steht
 
 def _next_id() -> int:
     global _event_id
@@ -561,19 +562,21 @@ ISOLATION_ALLOW_NET = '172.16.0.0/12'
 
 
 def _isolation_info() -> dict:
-    """Liefert Container-Adresse und das von der Isolierung ausgenommene Netz."""
+    """Liefert Container-Adresse, das ausgenommene Netz und den aktuellen Isolierungs-Zustand."""
     ok, out = _exec_in_container(
         "ip -4 -o addr show scope global 2>/dev/null "
         "| awk '{print $2\" \"$4}' | head -3")
     return {
-        'allow': ISOLATION_ALLOW_NET,
-        'blocked': f'alle Ziele ausser {ISOLATION_ALLOW_NET} und lo',
-        'ifaces': out if ok and out else '',
+        'allow':    ISOLATION_ALLOW_NET,
+        'blocked':  f'alle Ziele ausser {ISOLATION_ALLOW_NET} und lo',
+        'ifaces':   out if ok and out else '',
+        'isolated': _network_isolated,
     }
 
 
 def _apply_countermeasure(action: str, param: str = '') -> dict:
     """Fuehrt eine Rootkit-Gegenmassnahme im Container aus."""
+    global _network_isolated
     param = param.strip()
     if action == 'clear_ldpreload':
         ok, out = _exec_in_container('cat /etc/ld.so.preload; echo "" > /etc/ld.so.preload')
@@ -605,7 +608,8 @@ def _apply_countermeasure(action: str, param: str = '') -> dict:
         if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', param):
             return {'ok': False, 'msg': 'Ungültiger Modulname'}
         ok, out = _exec_in_container(f'rmmod {param} 2>&1')
-        broadcast({'type': 'countermeasure', 'action': action, 'ok': ok, 'detail': out})
+        broadcast({'type': 'countermeasure', 'action': action, 'ok': ok,
+                   'param': param, 'detail': out})
         return {'ok': ok, 'msg': out or 'Modul entfernt'}
 
     elif action == 'remove_rootkit':
@@ -632,17 +636,25 @@ def _apply_countermeasure(action: str, param: str = '') -> dict:
             f'iptables -A OUTPUT -o lo -j ACCEPT'
         )
         ok, out = _exec_in_container(cmds)
+        if ok:
+            _network_isolated = True
+        ni = _isolation_info()
         broadcast({'type': 'countermeasure', 'action': action, 'ok': ok,
-                   'param': '', 'detail': out})
+                   'param': '', 'detail': out,
+                   'isolated': _network_isolated, 'network': ni})
         return {'ok': ok, 'msg': 'Container netzwerk-isoliert' if ok else out,
-                'network': _isolation_info()}
+                'network': ni}
 
     elif action == 'restore_network':
         ok, out = _exec_in_container('iptables -P OUTPUT ACCEPT; iptables -F OUTPUT')
+        if ok:
+            _network_isolated = False
+        ni = _isolation_info()
         broadcast({'type': 'countermeasure', 'action': action, 'ok': ok,
-                   'param': '', 'detail': out})
+                   'param': '', 'detail': out,
+                   'isolated': _network_isolated, 'network': ni})
         return {'ok': ok, 'msg': 'Netzwerk-Regeln zurueckgesetzt' if ok else out,
-                'network': _isolation_info()}
+                'network': ni}
 
     elif action == 'remove_file':
         # Persistence-Datei entfernen – nur einfache Pfade ohne Traversal erlaubt
